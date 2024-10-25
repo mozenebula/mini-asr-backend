@@ -23,7 +23,7 @@ async def transcribe(
         logprob_threshold: float = Form(-1.0, description="对数概率阈值 / Log probability threshold"),
         no_speech_threshold: float = Form(0.6, description="无声部分的概率阈值 / No-speech probability threshold"),
         condition_on_previous_text: bool = Form(True,
-                                                description="是否基于前一个输出作为下一窗口的提示 / Condition on previous text"),
+                                                description="在连续语音中更准确地理解上下文 / Condition on previous text"),
         initial_prompt: str = Form("", description="初始提示文本 / Initial prompt text"),
         word_timestamps: bool = Form(False,
                                      description="是否提取每个词的时间戳信息 / Whether to extract word-level timestamp information"),

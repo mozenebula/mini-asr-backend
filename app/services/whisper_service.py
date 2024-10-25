@@ -8,6 +8,11 @@ import aiofiles
 from pydub import AudioSegment
 from fastapi.responses import FileResponse
 
+try:
+    torch.cuda.init()
+except Exception as e:
+    logging.error(f"Failed to initialize CUDA: {str(e)}")
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model_name = "large-v3"
 model = whisper.load_model(model_name, device=device)
