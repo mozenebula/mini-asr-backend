@@ -8,7 +8,7 @@ from typing import Optional
 def configure_logging(
     name: Optional[str] = None,
     log_level: int = logging.DEBUG,
-    log_dir: Optional[str] = './Log_Files',
+    log_dir: Optional[str] = './log_files',
     log_file_prefix: Optional[str] = 'app',
     when: str = 'midnight',
     interval: int = 1,
