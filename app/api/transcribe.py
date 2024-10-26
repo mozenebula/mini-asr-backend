@@ -1,10 +1,17 @@
 import logging
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks
 
-from app.services.whisper_service import transcribe_audio, extract_audio_from_video
+from app.services.whisper_service import WhisperService
+from app.utils.logging_utils import configure_logging
 
 router = APIRouter()
+
+# 配置日志记录器
+logger = configure_logging(name=__name__)
+
+# 实例化 WhisperService
+whisper_service = WhisperService()
 
 
 @router.post(
@@ -26,15 +33,7 @@ async def transcribe(
                                                 description="在连续语音中更准确地理解上下文 / Condition on previous text"),
         initial_prompt: str = Form("", description="初始提示文本 / Initial prompt text"),
         word_timestamps: bool = Form(False,
-                                     description="是否提取每个词的时间戳信息 / Whether to extract word-level timestamp information"),
-        prepend_punctuations: str = Form("\"'“¿([{-",
-                                         description="指定哪些标点符号与下一个词合并 / Specify punctuations to prepend to the next word"),
-        append_punctuations: str = Form("\"'.。,，!！?？:：”)]}、",
-                                        description="指定哪些标点符号与上一个词合并 / Specify punctuations to append to the previous word"),
-        clip_timestamps: str = Form("0",
-                                    description="处理的媒体片段的时间戳列表 / List of timestamps for media clips to process"),
-        hallucination_silence_threshold: float = Form(1.0,
-                                                      description="跳过长于该阈值的静默段 / Skip silent segments longer than this threshold")
+                                     description="是否提取每个词的时间戳信息 / Whether to extract word-level timestamp information")
 ):
     """
     # [中文]
@@ -55,11 +54,6 @@ async def transcribe(
     - `condition_on_previous_text` 可选参数，默认为`True`，用于控制是否基于前一个输出作为下一窗口的提示。
     - `initial_prompt` 可选参数，默认为空字符串，用于指定初始提示文本。
     - `word_timestamps` 可选参数，默认为`False`，用于控制是否提取每个词的时间戳信息。
-    - `prepend_punctuations` 可选参数，默认为`"'“¿([{-`，用于指定哪些标点符号与下一个词合并。
-    - `append_punctuations` 可选参数，默认为`"'.。,，!！?？:：”)]}、`，用于指定哪些标点符号与上一个词合并。
-    - `clip_timestamps` 可选参数，默认为`0`，用于指定处理的媒体片段的时间戳列表。
-    - `hallucination_silence_threshold` 可选参数，默认为`1.0`，用于跳过长于该阈值的静默段。
-
 
     # [English]
 
@@ -79,14 +73,11 @@ async def transcribe(
     - `condition_on_previous_text` is an optional parameter, defaulting to `True`, used to control whether the previous output is based on the next window prompt.
     - `initial_prompt` is an optional parameter, defaulting to an empty string, used to specify the initial prompt text.
     - `word_timestamps` is an optional parameter, defaulting to `False`, used to control whether word-level timestamp information is extracted.
-    - `prepend_punctuations` is an optional parameter, defaulting to `"'“¿([{-`, used to specify which punctuation marks are combined with the next word.
-    - `append_punctuations` is an optional parameter, defaulting to `"'.。,，!！?？:：”)]}、`, used to specify which punctuation marks are combined with the previous word.
-    - `clip_timestamps` is an optional parameter, defaulting to `0`, used to specify a list of timestamps for media clips to process.
-    - `hallucination_silence_threshold` is an optional parameter, defaulting to `1.0`, used to skip silent segments longer than this threshold.
     """
     try:
-        transcription = await transcribe_audio(
-            file,
+        # 调用 WhisperService 的 transcribe_audio 方法
+        transcription = await whisper_service.transcribe_audio(
+            file=file,
             speed_multiplier=speed_multiplier,
             temperature=temperature,
             verbose=verbose,
@@ -95,16 +86,14 @@ async def transcribe(
             no_speech_threshold=no_speech_threshold,
             condition_on_previous_text=condition_on_previous_text,
             initial_prompt=initial_prompt,
-            word_timestamps=word_timestamps,
-            prepend_punctuations=prepend_punctuations,
-            append_punctuations=append_punctuations,
-            clip_timestamps=clip_timestamps,
-            hallucination_silence_threshold=hallucination_silence_threshold
+            word_timestamps=word_timestamps
         )
+        logger.info(f"Transcription successful for file: {file.filename}")
     except HTTPException as e:
+        logger.error(f"HTTPException during transcription: {str(e.detail)}")
         raise e
     except Exception as e:
-        logging.error(f"Unknown error occurred during transcription: {str(e)}")
+        logger.error(f"Unknown error occurred during transcription: {str(e)}")
         raise HTTPException(status_code=500, detail=f"媒体转录过程中发生了未知错误：{str(e)}。请检查媒体文件是否正确。")
 
     return transcription
@@ -115,8 +104,37 @@ async def transcribe(
              summary="从视频文件中提取音频 / Extract audio from a video file")
 async def extract_audio(
         file: UploadFile = File(...),
-        sample_rate: int = Query(22050, description="音频的采样率（单位：Hz），例如 22050 或 44100。"),
-        bit_depth: int = Query(2, description="音频的位深度（1 或 2 字节），决定音频的质量和文件大小。"),
-        output_format: str = Query("wav", description="输出音频的格式，可选 'wav' 或 'mp3'。")
+        sample_rate: int = Form(22050, description="音频的采样率（单位：Hz），例如 22050 或 44100。"),
+        bit_depth: int = Form(2, description="音频的位深度（1 或 2 字节），决定音频的质量和文件大小。"),
+        output_format: str = Form("wav", description="输出音频的格式，可选 'wav' 或 'mp3'。"),
+        background_tasks: BackgroundTasks = None
 ):
-    return await extract_audio_from_video(file, sample_rate, bit_depth, output_format)
+    """
+    提取视频文件中的音频部分。
+
+    参数 | Parameters:
+        file (UploadFile): 上传的视频文件。
+        sample_rate (int): 采样率。
+        bit_depth (int): 位深度。
+        output_format (str): 输出格式，'wav' 或 'mp3'。
+        background_tasks (BackgroundTasks): FastAPI 的后台任务。
+
+    返回 | Returns:
+        FileResponse: 包含音频文件的响应。
+    """
+    try:
+        response = await whisper_service.extract_audio_from_video(
+            file=file,
+            sample_rate=sample_rate,
+            bit_depth=bit_depth,
+            output_format=output_format,
+            background_tasks=background_tasks
+        )
+        logger.info(f"Audio extracted successfully from video file: {file.filename}")
+        return response
+    except HTTPException as e:
+        logger.error(f"HTTPException during audio extraction: {str(e.detail)}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unknown error occurred during audio extraction: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"音频提取过程中发生了未知错误：{str(e)}。请检查视频文件是否正确。")
