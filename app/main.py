@@ -1,10 +1,11 @@
 from fastapi import FastAPI
 from app.api import transcribe, health_check
+from app.services.whisper_service_instance import whisper_service
 
 # 创建 FastAPI 应用实例
 app = FastAPI(
     title="Whisper Speech to Text API",
-    description="使用 Whisper 模型实现语音转文本的 API 服务。",
+    description="An open source Speech-to-Text API. The project is based on OpenAI's Whisper model and uses the asynchronous features of FastAPI to efficiently wrap it and support more custom functions.",
     version="1.0.0",
     docs_url="/",
 )
@@ -12,6 +13,16 @@ app = FastAPI(
 # 包含健康检查和音频转录的路由
 app.include_router(health_check.router, prefix="/health", tags=["Health Check"])
 app.include_router(transcribe.router, prefix="/transcribe", tags=["Transcribe"])
+
+@app.on_event("startup")
+async def startup_event():
+    # 启动任务处理器 | Start the task processor
+    whisper_service.start_task_processor()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    # 停止任务处理器 | Stop the task processor
+    whisper_service.stop_task_processor()
 
 if __name__ == "__main__":
     import uvicorn

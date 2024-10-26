@@ -46,3 +46,4 @@ urllib3==2.2.3
 uvicorn==0.32.0
 
 filetype~=1.2.0
+SQLAlchemy~=2.0.36

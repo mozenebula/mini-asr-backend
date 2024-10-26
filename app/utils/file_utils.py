@@ -51,11 +51,13 @@ class FileUtils:
 
         # 将 temp_dir 转换为基于当前工作目录的绝对路径 | Convert temp_dir to an absolute path
         if temp_dir:
+            # 创建临时目录 | Create temporary directory
+            os.makedirs(temp_dir, exist_ok=True)
             self.TEMP_DIR = os.path.abspath(temp_dir)
             self.temp_dir_obj = None
-            # 创建唯一的临时目录 | Create a unique temporary directory
-            self.TEMP_DIR = tempfile.mkdtemp(dir=self.TEMP_DIR)
-            if os.name != 'nt':  # 在非 Windows 系统上设置目录权限
+
+            # 在非 Windows 系统上设置目录权限
+            if os.name != 'nt':
                 os.chmod(self.TEMP_DIR, stat.S_IRWXU)  # 设置目录权限为 700 | Set directory permissions to 700
             self.logger.debug(f"Temporary directory set to {self.TEMP_DIR}")
         else:

@@ -1,17 +1,86 @@
+import asyncio
 import os
+import threading
+import json
 import uuid
-from typing import Optional
-
-from fastapi import UploadFile, HTTPException, BackgroundTasks
 import whisper
 import torch
-from pydub import AudioSegment
-from fastapi.responses import FileResponse
-from moviepy.editor import VideoFileClip
 
-# 文件相关处理 | File-related operations
+from typing import Optional
+from fastapi import UploadFile, HTTPException, BackgroundTasks
+from fastapi.responses import FileResponse
+from moviepy.video.io.VideoFileClip import VideoFileClip
+from pydub import AudioSegment
+
 from app.utils.file_utils import FileUtils
 from app.utils.logging_utils import configure_logging
+from app.services.tasks import Task, TaskStatus, SessionLocal
+
+
+class TaskProcessor:
+    """
+    任务处理器，用于后台处理任务队列 | Task processor for handling tasks in the background.
+    """
+
+    def __init__(self, model, file_utils):
+        self.model = model
+        self.file_utils = file_utils
+        self.loop = asyncio.new_event_loop()
+        self.thread = threading.Thread(target=self.run_loop, daemon=True)
+        self.logger = configure_logging(name=__name__)
+        self.shutdown_event = threading.Event()
+
+    def start(self):
+        self.thread.start()
+        self.logger.info("TaskProcessor started.")
+
+    def stop(self):
+        self.shutdown_event.set()
+        self.loop.call_soon_threadsafe(self.loop.stop)
+        self.thread.join()
+        self.logger.info("TaskProcessor stopped.")
+
+    def run_loop(self):
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_until_complete(self.process_tasks())
+
+    async def process_tasks(self):
+        while not self.shutdown_event.is_set():
+            try:
+                with SessionLocal() as session:
+                    task = session.query(Task).filter(Task.status == TaskStatus.QUEUED).first()
+                    if task:
+                        task.status = TaskStatus.PROCESSING
+                        session.commit()
+                        await self.process_task(task)
+                    else:
+                        await asyncio.sleep(5)
+            except Exception as e:
+                self.logger.error(f"Error in processing tasks: {str(e)}")
+                await asyncio.sleep(5)
+
+    async def process_task(self, task):
+        try:
+            self.logger.info(f"Processing task {task.id}")
+            # 执行转录任务 | Perform the transcription task
+            result = self.model.transcribe(task.file_path, **(task.decode_options or {}))
+            # 更新任务状态和结果 | Update task status and result
+            with SessionLocal() as session:
+                task_in_db = session.query(Task).get(task.id)
+                task_in_db.status = TaskStatus.COMPLETED
+                task_in_db.result = json.dumps(result)
+                session.commit()
+            # 删除临时文件 | Delete temporary file
+            await self.file_utils.delete_file(task.file_path)
+        except Exception as e:
+            with SessionLocal() as session:
+                task_in_db = session.query(Task).get(task.id)
+                task_in_db.status = TaskStatus.FAILED
+                task_in_db.error = str(e)
+                session.commit()
+            self.logger.error(f"Failed to process task {task.id}: {str(e)}")
+            # 删除临时文件 | Delete temporary file
+            await self.file_utils.delete_file(task.file_path)
 
 
 class WhisperService:
@@ -20,22 +89,12 @@ class WhisperService:
     Whisper service class for audio transcription and audio extraction from videos.
     """
 
-    def __init__(self, model_name: str = "large-v3", temp_dir: str = "./Temp_Files") -> None:
-        """
-        初始化 WhisperService 实例。
-
-        参数 | Parameters:
-            model_name (str): Whisper 模型名称，默认为 "large-v3"。
-            temp_dir (str): 临时文件目录，默认为 "Temp_Files"。
-
-        返回 | Returns:
-            None
-        """
+    def __init__(self, model_name: str = "large-v3") -> None:
         # 配置日志记录器
         self.logger = configure_logging(name=__name__)
 
         # 初始化 FileUtils 实例
-        self.file_utils = FileUtils(temp_dir=temp_dir)
+        self.file_utils = FileUtils()
 
         # 初始化 CUDA
         try:
@@ -55,59 +114,8 @@ class WhisperService:
             self.logger.error(f"Failed to load Whisper model '{self.model_name}': {str(e)}")
             raise RuntimeError(f"Failed to load model '{self.model_name}': {e}")
 
-    async def transcribe_audio(
-            self,
-            file: UploadFile,
-            speed_multiplier: float = 1.0,
-            **decode_options
-    ) -> dict:
-        """
-        转录音频文件 | Transcribe an audio file.
-
-        参数 | Parameters:
-            file (UploadFile): 上传的音频文件 | Uploaded audio file.
-            speed_multiplier (float): 速度倍率 | Speed multiplier.
-            **decode_options: 解码选项 | Decoding options.
-
-        返回 | Returns:
-            dict: 转录结果 | Transcription result.
-        """
-        self.logger.debug(f"Starting transcription for file: {file.filename}")
-        # 保存上传的音频文件
-        temp_file_path = await self.file_utils.save_uploaded_file(file)
-        self.logger.debug(f"Audio file saved to temporary path: {temp_file_path}")
-        temp_files_to_delete = [temp_file_path]  # 记录需要删除的临时文件
-        try:
-            if speed_multiplier != 1.0:
-                self.logger.debug(f"Adjusting audio speed by a factor of {speed_multiplier}")
-                # 调整音频速度
-                audio = AudioSegment.from_file(temp_file_path)
-                audio = audio.speedup(playback_speed=speed_multiplier)
-
-                # 生成新的临时文件路径
-                temp_fast_path = os.path.join(
-                    self.file_utils.TEMP_DIR,
-                    f"{uuid.uuid4().hex}_fast.mp3"
-                )
-                audio.export(temp_fast_path, format="mp3")
-                self.logger.debug(f"Adjusted audio saved to: {temp_fast_path}")
-                temp_files_to_delete.append(temp_fast_path)
-                temp_file_path = temp_fast_path
-
-            # 调用 Whisper 模型进行转录
-            self.logger.info(f"Transcribing audio file: {temp_file_path}")
-            result = self.model.transcribe(temp_file_path, **decode_options)
-            self.logger.info(f"Transcription completed for file: {file.filename}")
-            return result
-        except Exception as e:
-            self.logger.error(f"Audio processing failed: {str(e)}")
-            raise HTTPException(status_code=500, detail="音频处理失败")
-        finally:
-            # 删除所有临时文件
-            for path in temp_files_to_delete:
-                if os.path.exists(path):
-                    await self.file_utils.delete_file(path)
-                    self.logger.debug(f"Deleted temporary file: {path}")
+        # 初始化任务处理器 | Initialize the task processor
+        self.task_processor = TaskProcessor(self.model, self.file_utils)
 
     async def extract_audio_from_video(
             self,
@@ -134,7 +142,7 @@ class WhisperService:
 
         if not file.content_type.startswith("video/"):
             self.logger.warning(f"Invalid content type: {file.content_type}")
-            raise HTTPException(status_code=400, detail="仅支持视频文件。")
+            raise HTTPException(status_code=400, detail="File must be a video file.")
 
         # 保存上传的视频文件
         temp_video_path = await self.file_utils.save_uploaded_file(file)
@@ -172,7 +180,7 @@ class WhisperService:
                 temp_files_to_delete.append(temp_audio_path)
             else:
                 self.logger.warning(f"Unsupported output format: {output_format}")
-                raise HTTPException(status_code=400, detail="不支持的音频格式，仅支持 'wav' 和 'mp3'。")
+                raise HTTPException(status_code=400, detail="Unsupported output format, must be 'wav' or 'mp3'.")
 
             # 在响应后删除临时文件
             if background_tasks:
@@ -202,9 +210,48 @@ class WhisperService:
                 if os.path.exists(path):
                     await self.file_utils.delete_file(path)
                     self.logger.debug(f"Deleted temporary file after failure: {path}")
-            raise HTTPException(status_code=500, detail=f"音频提取失败: {e}")
+            raise HTTPException(status_code=500, detail=f"Audio extraction failed: {str(e)}")
         finally:
             # 确保视频剪辑被关闭
             if 'video_clip' in locals():
                 video_clip.close()
                 self.logger.debug("Video clip closed.")
+
+    def start_task_processor(self):
+        self.task_processor.start()
+
+    def stop_task_processor(self):
+        self.task_processor.stop()
+
+    async def create_transcription_task(
+            self,
+            file: UploadFile,
+            decode_options: dict
+    ) -> int:
+        """
+        创建转录任务并返回任务ID | Create a transcription task and return the task ID.
+
+        参数 | Parameters:
+            file (UploadFile): 上传的音频文件 | Uploaded audio file.
+            decode_options (dict): 解码选项 | Decoding options.
+
+        返回 | Returns:
+            int: 任务ID | Task ID.
+        """
+        # 保存上传的音频文件
+        temp_file_path = await self.file_utils.save_uploaded_file(file)
+        self.logger.debug(f"Audio file saved to temporary path: {temp_file_path}")
+
+        # 创建任务并存储到数据库 | Create task and store in database
+        with SessionLocal() as session:
+            task = Task(
+                status=TaskStatus.QUEUED,
+                file_path=temp_file_path,
+                decode_options=decode_options
+            )
+            session.add(task)
+            session.commit()
+            task_id = task.id
+
+        self.logger.info(f"Created transcription task with ID: {task_id}")
+        return task_id
