@@ -51,7 +51,9 @@ from app.utils.logging_utils import configure_logging
 
 class FileUtils:
     """
-    文件处理工具类 | File utility class for asynchronous file operations.
+    一个高性能且注重安全的文件工具类，支持异步操作，用于保存、删除和清理临时文件。
+
+    A high-performance and security-focused file utility class that supports asynchronous operations for saving, deleting, and cleaning up temporary files.
     """
 
     def __init__(

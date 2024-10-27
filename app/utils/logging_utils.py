@@ -53,20 +53,19 @@ def configure_logging(
     encoding: str = 'utf-8'
 ) -> logging.Logger:
     """
-    配置并返回一个日志记录器，支持日志轮转 | Configure and return a logger with log rotation.
+    一个日志记录器，支持日志轮转和控制台输出，使用 TimedRotatingFileHandler 处理器。
 
-    参数 | Parameters:
-        name (Optional[str]): 日志记录器的名称，默认为 None，使用根记录器。
-        log_level (int): 日志级别，默认为 logging.DEBUG。
-        log_dir (Optional[str]): 日志文件目录，默认为 './Log_Files'。
-        log_file_prefix (Optional[str]): 日志文件前缀，默认为 'app'。
-        when (str): 日志轮转的时间间隔单位，默认为 'midnight'。
-        interval (int): 日志轮转的间隔，默认为 1。
-        backup_count (int): 保留的备份文件数量，默认为 7。
-        encoding (str): 日志文件编码，默认为 'utf-8'。
+    A logger that supports log rotation and console output, using the TimedRotatingFileHandler handler.
 
-    返回 | Returns:
-        logging.Logger: 配置好的日志记录器。
+    :param name: 日志记录器的名称，默认为 None，使用根记录器。 | The name of the logger, default is None, using the root logger.
+    :param log_level: 日志级别，默认为 logging.DEBUG。 | The log level, default is logging.DEBUG.
+    :param log_dir: 日志文件目录，默认为 './log_files'。 | The log file directory, default is './log_files'.
+    :param log_file_prefix: 日志文件前缀，默认为 'app'。 | The log file prefix, default is 'app'.
+    :param when: 日志轮转的时间间隔单位，默认为 'midnight'。 | The time interval unit for log rotation, default is 'midnight'.
+    :param interval: 日志轮转的间隔，默认为 1。 | The interval for log rotation, default is 1.
+    :param backup_count: 保留的备份文件数量，默认为 7。 | The number of backup files to keep, default is 7.
+    :param encoding: 日志文件编码，默认为 'utf-8'。 | The log file encoding, default is 'utf-8'.
+    :return: 配置好的日志记录器。 | The configured logger.
     """
     logger = logging.getLogger(name)
     logger.setLevel(log_level)
