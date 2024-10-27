@@ -43,7 +43,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.services.whisper_service_instance import whisper_service
 from app.utils.logging_utils import configure_logging
 from app.database.database import DatabaseManager
-from app.models.APIResponseModel import ResponseModel, ErrorResponseModel
+from app.api.models.APIResponseModel import ResponseModel, ErrorResponseModel
 from app.database.models import Task, TaskStatus, TaskPriority
 
 router = APIRouter()
@@ -123,7 +123,8 @@ async def create_transcription_task(
 
 
 @router.get("/tasks/check",
-            summary="获取任务状态 / Get task status")
+            summary="获取任务状态 / Get task status",
+            response_model=ResponseModel)
 async def get_task_status(
         request: Request,
         task_id: int = Query(description="任务ID / Task ID")
@@ -150,7 +151,9 @@ async def get_task_status(
         )
 
 
-@router.get("/tasks/result", summary="获取任务结果 / Get task result")
+@router.get("/tasks/result",
+            summary="获取任务结果 / Get task result",
+            response_model=ResponseModel)
 async def get_task_result(
     request: Request,
     task_id: int = Query(description="任务ID / Task ID")
@@ -178,7 +181,12 @@ async def get_task_result(
                         params=dict(request.query_params),
                     ).dict()
                 )
-            return task.to_dict()
+            return ResponseModel(
+                code=status.HTTP_200_OK,
+                router=str(request.url),
+                params=dict(request.query_params),
+                data=task.to_dict()
+            )
 
     except SQLAlchemyError as db_error:
         logger.error(f"Database error: {str(db_error)}")

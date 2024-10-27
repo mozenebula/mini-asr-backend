@@ -35,10 +35,8 @@
 #
 # ==============================================================================
 
-from app.main import app
+import uvicorn
 from config.settings import Settings
 
 if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host=Settings.FastAPISettings.ip, port=Settings.FastAPISettings.port)
+    uvicorn.run('app.main:app', host=Settings.FastAPISettings.ip, port=Settings.FastAPISettings.port)

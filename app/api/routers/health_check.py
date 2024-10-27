@@ -35,14 +35,35 @@
 #
 # ==============================================================================
 
-from fastapi import APIRouter
+from fastapi import APIRouter, status
+from pydantic import BaseModel
 
 router = APIRouter()
 
 
-@router.get("/")
+class HealthCheckResponse(BaseModel):
+    status: str = "ok"
+
+
+@router.get(
+    "/check",
+    summary="检查服务器是否正确响应请求 / Check if the server responds to requests correctly",
+    response_model=HealthCheckResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        200: {
+            "description": "服务器响应成功 / Server responds successfully",
+            "content": {
+                "application/json": {
+                    "example": {"status": "ok"}
+                }
+            }
+        }
+    }
+)
 async def health_check():
     """
     健康检查端点，用于确认服务是否正常运行。
+    Health check endpoint to confirm that the service is running properly.
     """
-    return {"status": "ok"}
+    return HealthCheckResponse()

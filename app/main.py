@@ -36,7 +36,7 @@
 # ==============================================================================
 
 from fastapi import FastAPI
-from app.api import transcribe, health_check
+from app.api.router import router as api_router
 from app.database.database import DatabaseManager
 from app.services.whisper_service_instance import whisper_service
 from config.settings import Settings
@@ -53,9 +53,20 @@ app = FastAPI(
 # 数据库地址 | Database URL
 DATABASE_URL = Settings.DatabaseSettings.url
 
-# 包含健康检查和音频转录的路由
-app.include_router(health_check.router, prefix="/health", tags=["Health Check"])
-app.include_router(transcribe.router, prefix="/transcribe", tags=["Transcribe"])
+# API Tags
+tags_metadata = [
+    {
+        "name": "Health-Check",
+        "description": "**(服务器健康检查/Server Health Check)**",
+    },
+    {
+        "name": "Whisper-Transcribe",
+        "description": "**(Whisper语音转文本/Whisper Speech to Text)**",
+    },
+]
+
+# API 路由 | API Router
+app.include_router(api_router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_event():

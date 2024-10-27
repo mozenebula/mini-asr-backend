@@ -38,7 +38,6 @@
 import asyncio
 import os
 import threading
-import json
 import uuid
 import whisper
 import torch
