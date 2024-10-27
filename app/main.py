@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.api import transcribe, health_check
+from app.database.database import DatabaseManager
 from app.services.whisper_service_instance import whisper_service
 
 # 创建 FastAPI 应用实例
@@ -10,12 +11,17 @@ app = FastAPI(
     docs_url="/",
 )
 
+# 数据库地址 | Database URL
+DATABASE_URL = 'sqlite+aiosqlite:///tasks.db'
+
 # 包含健康检查和音频转录的路由
 app.include_router(health_check.router, prefix="/health", tags=["Health Check"])
 app.include_router(transcribe.router, prefix="/transcribe", tags=["Transcribe"])
 
 @app.on_event("startup")
 async def startup_event():
+    # 初始化数据库 | Initialize the database
+    await DatabaseManager.initialize(DATABASE_URL)
     # 启动任务处理器 | Start the task processor
     whisper_service.start_task_processor()
 

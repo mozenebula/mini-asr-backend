@@ -1,26 +1,36 @@
-import json
+from typing import Union, List, Optional
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks
+from fastapi import Request, APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks, Query, status
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.services.whisper_service_instance import whisper_service
 from app.utils.logging_utils import configure_logging
-from app.services.tasks import Task, TaskStatus, SessionLocal
+from app.database.database import DatabaseManager
+from app.models.APIResponseModel import ResponseModel, ErrorResponseModel
+from app.database.models import Task, TaskStatus, TaskPriority
 
 router = APIRouter()
 
 # 配置日志记录器
 logger = configure_logging(name=__name__)
 
+# 初始化数据库管理器
+db_manager = DatabaseManager()
+
 
 @router.post(
-    "/",
-    summary="上传媒体文件并将其转换为文本 / Upload a media file and convert it to text"
+    "/task/create",
+    response_model=ResponseModel,
+    summary="上传媒体文件并且创建一个Whisper转录任务在后台处理 | Upload a media file and create a Whisper transcription task to be processed in the background"
 )
-async def transcribe(
+async def create_transcription_task(
+        request: Request,
         file: UploadFile = File(...,
                                 description="媒体文件（支持的格式：音频和视频，如 MP3, WAV, MP4, MKV 等） / Media file (supported formats: audio and video, e.g., MP3, WAV, MP4, MKV)"),
-        temperature: float = Form(0.2, description="采样温度 / Sampling temperature"),
-        verbose: bool = Form(True, description="是否显示详细信息 / Whether to display detailed information"),
+        priority: TaskPriority = Form(TaskPriority.NORMAL, description="任务优先级 / Task priority"),
+        temperature: Union[float, List[float]] = Form(0.2,
+                                                      description="采样温度 / Sampling temperature (can be a single value or a list of values)"),
+        verbose: bool = Form(False, description="是否显示详细信息 / Whether to display detailed information"),
         compression_ratio_threshold: float = Form(2.4, description="压缩比阈值 / Compression ratio threshold"),
         logprob_threshold: float = Form(-1.0, description="对数概率阈值 / Log probability threshold"),
         no_speech_threshold: float = Form(0.6, description="无声部分的概率阈值 / No-speech probability threshold"),
@@ -28,14 +38,16 @@ async def transcribe(
                                                 description="在连续语音中更准确地理解上下文 / Condition on previous text"),
         initial_prompt: str = Form("", description="初始提示文本 / Initial prompt text"),
         word_timestamps: bool = Form(False,
-                                     description="是否提取每个词的时间戳信息 / Whether to extract word-level timestamp information")
+                                     description="是否提取每个词的时间戳信息 / Whether to extract word-level timestamp information"),
+        prepend_punctuations: str = Form("\"'“¿([{-",
+                                         description="前置标点符号集合 / Prepend punctuation characters"),
+        append_punctuations: str = Form("\"'.。,，!！?？:：”)]}、",
+                                        description="后置标点符号集合 / Append punctuation characters"),
+        clip_timestamps: Union[str, List[float]] = Form("0",
+                                                        description="裁剪时间戳 / Clip timestamps to avoid out-of-range issues"),
+        hallucination_silence_threshold: Optional[float] = Form(None,
+                                                                description="幻听静音阈值 / Hallucination silence threshold")
 ):
-    """
-    上传媒体文件并将其转换为文本 | Upload a media file and convert it to text.
-
-    返回任务ID，客户端可以根据任务ID查询任务状态和结果。
-    Return task ID, client can query task status and result using the task ID.
-    """
     try:
         decode_options = {
             "temperature": temperature,
@@ -45,49 +57,122 @@ async def transcribe(
             "no_speech_threshold": no_speech_threshold,
             "condition_on_previous_text": condition_on_previous_text,
             "initial_prompt": initial_prompt,
-            "word_timestamps": word_timestamps
+            "word_timestamps": word_timestamps,
+            "prepend_punctuations": prepend_punctuations,
+            "append_punctuations": append_punctuations,
+            "clip_timestamps": clip_timestamps,
+            "hallucination_silence_threshold": hallucination_silence_threshold
         }
-        task_id = await whisper_service.create_transcription_task(
+        task_info = await whisper_service.create_transcription_task(
             file=file,
-            decode_options=decode_options
+            decode_options=decode_options,
+            priority=priority
         )
-        return {"task_id": task_id, "message": "Task submitted successfully."}
-    except HTTPException as e:
-        logger.error(f"HTTPException during transcription: {str(e.detail)}")
-        raise e
+        return ResponseModel(code=200,
+                             router=str(request.url),
+                             params=dict(request.query_params),
+                             data=task_info.to_dict())
     except Exception as e:
         logger.error(f"Unknown error occurred during transcription: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"媒体转录过程中发生了未知错误：{str(e)}。请检查媒体文件是否正确。")
+        detail = ErrorResponseModel(code=500,
+                                    router=str(request.url),
+                                    params=dict(request.query_params),
+                                    message=f"Failed to create transcription task. An unknown error occurred: {str(e)}",
+                                    ).dict()
+        raise HTTPException(
+            status_code=500,
+            detail=detail
+        )
 
 
-@router.get("/tasks/{task_id}", summary="获取任务状态 / Get task status")
-async def get_task_status(task_id: int):
-    with SessionLocal() as session:
-        task = session.query(Task).get(task_id)
-        if not task:
-            raise HTTPException(status_code=404, detail="Task not found.")
-        return {
-            "task_id": task.id,
-            "status": task.status.value,
-            "error": task.error
-        }
+@router.get("/tasks/check",
+            summary="获取任务状态 / Get task status")
+async def get_task_status(
+        request: Request,
+        task_id: int = Query(description="任务ID / Task ID")
+):
+    try:
+        async with db_manager.get_session() as session:
+            task_info = await session.get(Task, task_id)
+            if not task_info:
+                raise HTTPException(status_code=404, detail="Task not found in the database.")
+            return ResponseModel(code=200,
+                                 router=str(request.url),
+                                 params=dict(request.query_params),
+                                 data=task_info.to_dict())
+    except Exception as e:
+        logger.error(f"Unknown error occurred during task status check: {str(e)}")
+        detail = ErrorResponseModel(code=500,
+                                    router=str(request.url),
+                                    params=dict(request.query_params),
+                                    message=f"Failed to retrieve task status. An unknown error occurred: {str(e)}",
+                                    ).dict()
+        raise HTTPException(
+            status_code=500,
+            detail=detail
+        )
 
 
-@router.get("/tasks/{task_id}/result", summary="获取任务结果 / Get task result")
-async def get_task_result(task_id: int):
-    with SessionLocal() as session:
-        task = session.query(Task).get(task_id)
-        if not task:
-            raise HTTPException(status_code=404, detail="Task not found.")
-        if task.status != TaskStatus.COMPLETED:
-            raise HTTPException(status_code=400, detail="Task is not completed yet.")
-        return {
-            "task_id": task.id,
-            "result": json.loads(task.result)  # Assuming result is stored as JSON string
-        }
+@router.get("/tasks/result", summary="获取任务结果 / Get task result")
+async def get_task_result(
+    request: Request,
+    task_id: int = Query(description="任务ID / Task ID")
+):
+    try:
+        async with db_manager.get_session() as session:
+            task = await session.get(Task, task_id)
+            if not task:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=ErrorResponseModel(
+                        code=status.HTTP_404_NOT_FOUND,
+                        message="Task not found.",
+                        router=str(request.url),
+                        params=dict(request.query_params),
+                    ).dict()
+                )
+            if task.status != TaskStatus.COMPLETED:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ErrorResponseModel(
+                        code=status.HTTP_400_BAD_REQUEST,
+                        message="Task is not completed yet.",
+                        router=str(request.url),
+                        params=dict(request.query_params),
+                    ).dict()
+                )
+            return task.to_dict()
+
+    except SQLAlchemyError as db_error:
+        logger.error(f"Database error: {str(db_error)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=ErrorResponseModel(
+                code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                message="Database error occurred. Please try again later.",
+                router=str(request.url),
+                params=dict(request.query_params),
+            ).dict()
+        )
+
+    except HTTPException as http_exc:
+        # Directly re-raise HTTPExceptions
+        raise http_exc
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ErrorResponseModel(
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unexpected error occurred while retrieving the task result.",
+                router=str(request.url),
+                params=dict(request.query_params),
+            ).dict()
+        )
 
 
-@router.post("/extract-audio/",
+@router.post("/extract-audio",
              summary="从视频文件中提取音频 / Extract audio from a video file")
 async def extract_audio(
         file: UploadFile = File(...,
