@@ -35,14 +35,10 @@
 #
 # ==============================================================================
 
-from fastapi import APIRouter
+from app.main import app
+from config.settings import Settings
 
-router = APIRouter()
+if __name__ == "__main__":
+    import uvicorn
 
-
-@router.get("/")
-async def health_check():
-    """
-    健康检查端点，用于确认服务是否正常运行。
-    """
-    return {"status": "ok"}
+    uvicorn.run(app, host=Settings.FastAPISettings.ip, port=Settings.FastAPISettings.port)
