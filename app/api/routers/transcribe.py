@@ -34,7 +34,7 @@
 # No one yet...
 #
 # ==============================================================================
-
+import traceback
 from typing import Union, List, Optional
 
 from fastapi import Request, APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks, Query, status
@@ -111,6 +111,7 @@ async def create_transcription_task(
                              data=task_info.to_dict())
     except Exception as e:
         logger.error(f"Unknown error occurred during transcription: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         detail = ErrorResponseModel(code=500,
                                     router=str(request.url),
                                     params=dict(request.query_params),
@@ -140,6 +141,7 @@ async def get_task_status(
                                  data=task_info.to_dict())
     except Exception as e:
         logger.error(f"Unknown error occurred during task status check: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         detail = ErrorResponseModel(code=500,
                                     router=str(request.url),
                                     params=dict(request.query_params),
@@ -206,6 +208,7 @@ async def get_task_result(
 
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=ErrorResponseModel(
@@ -255,4 +258,5 @@ async def extract_audio(
         raise e
     except Exception as e:
         logger.error(f"Unknown error occurred during audio extraction: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Failed to extract audio: {str(e)}")

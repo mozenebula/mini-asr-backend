@@ -65,25 +65,26 @@ class FileUtils:
             temp_dir: str = './temp_files'
     ) -> None:
         """
-        初始化 FileUtils 实例 | Initialize the FileUtils instance.
+        初始化文件工具类
 
-        参数 | Parameters:
-            chunk_size (int): 文件读取块大小，默认1MB | File read chunk size, default is 1MB.
-            batch_size (int): 分批处理的批大小，默认10 | Batch size for processing files, default is 10.
-            delete_batch_size (int): 文件删除批大小，默认5 | Batch size for deleting files, default is 5.
-            auto_delete (bool): 是否自动删除临时文件，默认True | Whether to auto-delete temporary files, default is True.
-            limit_file_size (bool): 是否限制文件大小，默认True | Whether to limit file size, default is True.
-            max_file_size (int): 最大文件大小（字节），默认2GB | Maximum file size in bytes, default is 2GB.
-            temp_dir (str): 临时文件夹路径，默认'./Temp_Files' | Temporary directory path, default is './Temp_Files'.
+        Initialize the file utility class.
 
-        返回 | Returns:
-            None
+        :param chunk_size: 文件读取块大小，默认1MB | File read chunk size, default is 1MB.
+        :param batch_size: 分批处理的批大小，默认10 | Batch size for processing files, default is 10.
+        :param delete_batch_size: 文件删除批大小，默认5 | Batch size for deleting files, default is 5.
+        :param auto_delete: 是否自动删除临时文件，默认True | Whether to auto-delete temporary files, default is True.
+        :param limit_file_size: 是否限制文件大小，默认True | Whether to limit file size, default is True.
+        :param max_file_size: 最大文件大小（字节），默认2GB | Maximum file size in bytes, default is 2GB.
+        :param temp_dir: 临时文件夹路径，默认'./temp_files' | Temporary directory path, default is './temp_files'.
+        :return: None
         """
+
         # 配置日志记录器 | Configure the logger
         self.logger = configure_logging(name=__name__)
 
         # 设置 umask，确保新创建的文件权限为 600 | Set umask to ensure new files have 600 permissions
-        if os.name != 'nt':  # 在非 Windows 系统上设置 umask
+        if os.name != 'nt':
+            # 在非 Windows 系统上设置 umask
             os.umask(0o077)
 
         # 将 temp_dir 转换为基于当前工作目录的绝对路径 | Convert temp_dir to an absolute path
@@ -125,14 +126,13 @@ class FileUtils:
 
     async def save_file(self, file: bytes, file_name: str) -> str:
         """
-        保存字节文件到临时目录 | Save a bytes file to the temporary directory.
+        保存字节文件到临时目录
 
-        参数 | Parameters:
-            file (bytes): 要保存的文件内容 | Content of the file to save.
-            file_name (str): 原始文件名 | Original file name.
+        Save a bytes file to the temporary directory.
 
-        返回 | Returns:
-            str: 保存的文件路径 | Path to the saved file.
+        :param file: 要保存的文件内容 | Content of the file to save.
+        :param file_name: 原始文件名 | Original file name.
+        :return: 保存的文件路径 | Path to the saved file.
         """
         safe_file_name = self._generate_safe_file_name(file_name)
         file_path = os.path.join(self.TEMP_DIR, safe_file_name)
@@ -158,32 +158,35 @@ class FileUtils:
             async with aiofiles.open(file_path, 'wb') as f:
                 await f.write(file)
             # 设置文件权限，仅所有者可读写 | Set file permissions to 600
-            if os.name != 'nt':  # 在非 Windows 系统上设置权限
+            if os.name != 'nt':
+                # 在非 Windows 系统上设置权限 | Set permissions on non-Windows systems
                 await asyncio.to_thread(os.chmod, file_path, stat.S_IRUSR | stat.S_IWUSR)
 
             # 文件类型验证 | File type validation
             if not self.is_allowed_file_type(file_path):
-                self.logger.error("File type is not supported.")
+                error_msg = f"File type: {file_name} is not supported."
+                self.logger.error(error_msg)
                 await self.delete_file(file_path)
-                raise ValueError("File type is not supported.")
+                raise ValueError(error_msg)
 
             self.logger.debug("File saved successfully.")
             return file_path
         except (OSError, IOError) as e:
-            self.logger.error("Failed to save file due to an exception.")
+            error_msg = f"Failed to save file due to an exception: {str(e)}"
+            self.logger.error(error_msg)
             raise ValueError("An error occurred while saving the file.")
 
     async def save_uploaded_file(self, file: UploadFile) -> str:
         """
-        保存FastAPI上传的文件到临时目录 | Save an uploaded file from FastAPI to the temporary directory.
+        保存FastAPI上传的文件到临时目录
 
-        参数 | Parameters:
-            file (UploadFile): FastAPI上传的文件对象 | File object uploaded via FastAPI.
+        Save an uploaded file from FastAPI to the temporary directory.
 
-        返回 | Returns:
-            str: 保存的文件路径 | Path to the saved file.
+        :param file: FastAPI上传的文件对象 | File object uploaded via FastAPI.
+        :return: 保存的文件路径 | Path to the saved file.
         """
         safe_file_name = self._generate_safe_file_name(file.filename)
+        self.logger.debug(f"Name uploaded file to: {safe_file_name}")
         file_path = os.path.join(self.TEMP_DIR, safe_file_name)
         file_path = os.path.realpath(file_path)
         # 确保文件路径在 TEMP_DIR 内部 | Ensure file path is within TEMP_DIR
@@ -213,30 +216,31 @@ class FileUtils:
                     await f.write(content)
             # 设置文件权限，仅所有者可读写 | Set file permissions to 600
             if os.name != 'nt':
+                # 在非 Windows 系统上设置权限 | Set permissions on non-Windows systems
                 await asyncio.to_thread(os.chmod, file_path, stat.S_IRUSR | stat.S_IWUSR)
 
             # 文件类型验证 | File type validation
             if not self.is_allowed_file_type(file_path):
-                self.logger.error(f"File type is not supported.")
+                self.logger.error(f"File type: {file.filename} is not supported.")
                 await self.delete_file(file_path)
                 raise ValueError("File type is not supported.")
 
             self.logger.debug("Uploaded file saved successfully.")
             return file_path
         except (OSError, IOError, ValueError) as e:
-            self.logger.error("Failed to save uploaded file due to an exception.")
+            self.logger.error(f"Failed to save uploaded file due to an exception: {str(e)}")
             raise ValueError("An error occurred while saving the uploaded file.")
 
     async def delete_files_in_batch(self, file_paths: List[str]) -> None:
         """
-        异步批量删除文件 | Asynchronously delete files in batches.
+        异步批量删除文件
 
-        参数 | Parameters:
-            file_paths (List[str]): 要删除的文件路径列表 | List of file paths to delete.
+        Asynchronously delete files in batches.
 
-        返回 | Returns:
-            None
+        :param file_paths: 要删除的文件路径列表 | List of file paths to delete.
+        :return: None
         """
+        # 信号量控制并发删除 | Semaphore to control concurrent deletion
         semaphore = asyncio.Semaphore(self.DELETE_BATCH_SIZE)
 
         async def sem_delete(file_path):
@@ -248,18 +252,17 @@ class FileUtils:
             await asyncio.gather(*tasks)
             self.logger.debug("Batch of files deleted successfully.")
         except Exception as e:
-            self.logger.error("Failed to delete batch of files due to an exception.")
+            self.logger.error(f"Failed to delete batch of files due to an exception: {str(e)}")
             raise ValueError("An error occurred while deleting files.")
 
     async def delete_file(self, file_path: str) -> None:
         """
-        异步删除单个文件 | Asynchronously delete a single file.
+        异步删除单个文件
 
-        参数 | Parameters:
-            file_path (str): 要删除的文件路径 | Path of the file to delete.
+        Asynchronously delete a single file.
 
-        返回 | Returns:
-            None
+        :param file_path: 要删除的文件路径 | Path of the file to delete.
+        :return: None
         """
         file_path = os.path.realpath(file_path)
         # 确保文件路径在 TEMP_DIR 内部 | Ensure file path is within TEMP_DIR
@@ -289,13 +292,11 @@ class FileUtils:
 
     async def cleanup_temp_files(self) -> None:
         """
-        清理所有临时文件 | Clean up all temporary files.
+        清理所有临时文件
 
-        参数 | Parameters:
-            None
+        Clean up all temporary files.
 
-        返回 | Returns:
-            None
+        :return: None
         """
         if self.AUTO_DELETE:
             try:
@@ -305,24 +306,24 @@ class FileUtils:
                     for f in os.listdir(self.TEMP_DIR)
                     if os.path.isfile(os.path.join(self.TEMP_DIR, f))
                 ]
+                self.logger.debug(f"Found {len(file_paths)} temporary files.")
                 # 分批删除文件 | Delete files in batches
                 for i in range(0, len(file_paths), self.DELETE_BATCH_SIZE):
                     batch = file_paths[i:i + self.DELETE_BATCH_SIZE]
                     await self.delete_files_in_batch(batch)
-                self.logger.debug("All temporary files have been cleaned up.")
+                self.logger.debug(f"All temporary files have been cleaned up.")
             except (OSError, IOError) as e:
-                self.logger.error("Failed to clean up temporary files due to an exception.")
+                self.logger.error(f"Failed to clean up temporary files due to an exception: {str(e)}")
                 raise ValueError("An error occurred while cleaning up temporary files.")
 
     def _generate_safe_file_name(self, original_name: str) -> str:
         """
-        生成安全且唯一的文件名 | Generate a safe and unique file name.
+        生成安全且唯一的文件名
 
-        参数 | Parameters:
-            original_name (str): 原始文件名 | Original file name.
+        Generate a safe and unique file name.
 
-        返回 | Returns:
-            str: 安全且唯一的文件名 | Safe and unique file name.
+        :param original_name: 原始文件名 | Original file name.
+        :return: 安全且唯一的文件名 | Safe and unique file name.
         """
         # 获取文件的扩展名，并限制为合法字符 | Get file extension and allow only safe characters
         _, ext = os.path.splitext(original_name)
@@ -332,18 +333,17 @@ class FileUtils:
             ext = ext[:10]
         # 生成唯一的文件名 | Generate a unique file name
         unique_name = f"{uuid.uuid4().hex}{ext}"
-        self.logger.debug("Generated unique file name.")
+        self.logger.debug(f"Generated unique file name: {unique_name}")
         return unique_name
 
     def is_allowed_file_type(self, file_path: str) -> bool:
         """
-        检查文件是否为允许的类型 | Check if the file is of an allowed type.
+        检查文件是否为允许的类型
 
-        参数 | Parameters:
-            file_path (str): 文件路径 | Path to the file.
+        Check if the file is of an allowed type.
 
-        返回 | Returns:
-            bool: 如果文件类型被允许则返回 True，否则返回 False | True if the file type is allowed, False otherwise.
+        :param file_path: 文件路径 | Path to the file.
+        :return: 如果文件类型被允许则返回True，否则返回False | True if the file type is allowed, False otherwise.
         """
         try:
             # 使用 filetype 库检测文件类型 | Detect file type using filetype library
@@ -363,13 +363,11 @@ class FileUtils:
 
     async def __aenter__(self) -> 'FileUtils':
         """
-        进入异步上下文管理器 | Enter the asynchronous context manager.
+        进入异步上下文管理器
 
-        参数 | Parameters:
-            None
+        Enter the asynchronous context manager.
 
-        返回 | Returns:
-            FileUtils: 文件工具类的实例 | Instance of the FileUtils class.
+        :return: 文件工具类的实例 | Instance of the FileUtils class.
         """
         self.logger.debug("Entering FileUtils context manager.")
         return self
@@ -381,15 +379,14 @@ class FileUtils:
             exc_tb: Optional[Any]
     ) -> None:
         """
-        退出异步上下文管理器，清理资源 | Exit the asynchronous context manager and clean up resources.
+        退出异步上下文管理器，清理资源
 
-        参数 | Parameters:
-            exc_type (Optional[type]): 异常类型 | Exception type.
-            exc_val (Optional[BaseException]): 异常值 | Exception value.
-            exc_tb (Optional[Any]): Traceback对象 | Traceback object.
+        Exit the asynchronous context manager and clean up resources.
 
-        返回 | Returns:
-            None
+        :param exc_type: 异常类型 | Exception type.
+        :param exc_val: 异常值 | Exception value.
+        :param exc_tb: Traceback对象 | Traceback object.
+        :return: None
         """
         self.logger.debug("Exiting FileUtils context manager.")
         # 等待清理任务完成，确保资源释放 | Wait for cleanup tasks to complete

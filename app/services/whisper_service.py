@@ -35,125 +35,57 @@
 #
 # ==============================================================================
 
-import asyncio
 import os
-import threading
 import uuid
-import whisper
-import torch
-
 from typing import Optional
+
+import torch
+import whisper
 from fastapi import UploadFile, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from pydub import AudioSegment
-from sqlalchemy import select
 
+from app.database.database import DatabaseManager
+from app.database.models import Task
+from app.services.task_processor import TaskProcessor
 from app.utils.file_utils import FileUtils
 from app.utils.logging_utils import configure_logging
-from app.database.models import Task, TaskStatus
-from app.database.database import DatabaseManager
+from config.settings import Settings
 
 # 初始化数据库管理器
 db_manager = DatabaseManager()
 
 
-class TaskProcessor:
-    """
-    任务处理器，用于后台处理任务队列 | Task processor for handling tasks in the background.
-    """
-
-    def __init__(self, model, file_utils):
-        self.model = model
-        self.file_utils = file_utils
-        self.loop = asyncio.new_event_loop()
-        self.thread = threading.Thread(target=self.run_loop, daemon=True)
-        self.logger = configure_logging(name=__name__)
-        self.shutdown_event = threading.Event()
-
-    def start(self):
-        self.thread.start()
-        self.logger.info("TaskProcessor started.")
-
-    def stop(self):
-        self.shutdown_event.set()
-        self.loop.call_soon_threadsafe(self.loop.stop)
-        self.thread.join()
-        self.logger.info("TaskProcessor stopped.")
-
-    def run_loop(self):
-        asyncio.set_event_loop(self.loop)
-        self.loop.run_until_complete(self.process_tasks())
-
-    async def process_tasks(self):
-        while not self.shutdown_event.is_set():
-            try:
-                async with db_manager.get_session() as session:
-                    # 使用 select 构建查询语句，替代 session.query
-                    result = await session.execute(
-                        select(Task).where(Task.status == TaskStatus.QUEUED).limit(1)
-                    )
-                    task = result.scalar_one_or_none()
-
-                    if task:
-                        task.status = TaskStatus.PROCESSING
-                        await session.commit()
-                        await self.process_task(task)
-                    else:
-                        await asyncio.sleep(5)
-            except Exception as e:
-                self.logger.error(f"Error in processing tasks: {str(e)}")
-                await asyncio.sleep(5)
-
-    async def process_task(self, task):
-        try:
-            self.logger.info(f"Processing task {task.id}")
-            # 执行转录任务
-            result = self.model.transcribe(task.file_path, **(task.decode_options or {}))
-
-            # 更新任务状态和结果
-            async with db_manager.get_session() as session:
-                task_in_db = await session.get(Task, task.id)
-                task_in_db.status = TaskStatus.COMPLETED
-                task_in_db.result = result
-                await session.commit()
-
-            # 删除临时文件
-            await self.file_utils.delete_file(task.file_path)
-        except Exception as e:
-            async with db_manager.get_session() as session:
-                task_in_db = await session.get(Task, task.id)
-                task_in_db.status = TaskStatus.FAILED
-                task_in_db.error_message = str(e)
-                await session.commit()
-
-            self.logger.error(f"Failed to process task {task.id}: {str(e)}")
-            # 删除临时文件
-            await self.file_utils.delete_file(task.file_path)
-
-
 class WhisperService:
     """
     Whisper 服务类，用于处理音频和视频的转录和音频提取。
+
+    Whisper service class for handling transcription and audio extraction of audio and video files.
     """
 
-    def __init__(self, model_name: str = "large-v3") -> None:
-        # 配置日志记录器
+    def __init__(self, model_name: str = None) -> None:
+        # 配置日志记录器 | Configure logger
         self.logger = configure_logging(name=__name__)
 
-        # 初始化 FileUtils 实例
-        self.file_utils = FileUtils()
+        # 初始化 FileUtils 实例 | Initialize FileUtils instance
+        self.file_utils = FileUtils(
+            auto_delete=Settings.FileSettings.auto_delete,
+            limit_file_size=Settings.FileSettings.limit_file_size,
+            max_file_size=Settings.FileSettings.max_file_size,
+            temp_dir=Settings.FileSettings.temp_files_dir
+        )
 
-        # 初始化 CUDA
+        # 尝试初始化 CUDA | Try to initialize CUDA
         try:
             torch.cuda.init()
             self.logger.info("CUDA initialized successfully.")
         except Exception as e:
             self.logger.warning(f"Failed to initialize CUDA: {str(e)}")
 
-        # 选择设备和加载模型
+        # 选择设备和加载模型 | Select device and load model
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model_name = model_name
+        self.model_name = Settings.WhisperSettings.model_name if model_name is None else model_name
         self.logger.info(f"Loading Whisper model '{self.model_name}' on device '{self.device}'.")
         try:
             self.model = whisper.load_model(self.model_name, device=self.device)
@@ -162,8 +94,8 @@ class WhisperService:
             self.logger.error(f"Failed to load Whisper model '{self.model_name}': {str(e)}")
             raise RuntimeError(f"Failed to load model '{self.model_name}': {e}")
 
-        # 初始化任务处理器
-        self.task_processor = TaskProcessor(self.model, self.file_utils)
+        # 初始化任务处理器 | Initialize task processor
+        self.task_processor = TaskProcessor(self.model, self.file_utils, db_manager)
 
     async def extract_audio_from_video(
             self,
