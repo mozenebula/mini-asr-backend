@@ -1,98 +1,103 @@
 # Whisper-Speech-to-Text-API 🎙️➡️📜
 
-欢迎来到 **[Whisper-Speech-to-Text-API](https://github.com/Evil0ctal/Whisper-Speech-to-Text-API)** 项目！本项目为开发者们提供了一个快速、可靠的 API，通过调用 [OpenAI Whisper](https://github.com/openai/whisper) 模型，将多种格式的视频或音频文件高效转换为文本，适合语音识别、字幕生成和文本分析需求。
+[Chinese](README.md) | [English](README-EN.md)
 
-## 项目地址 📂
+Welcome to the **[Whisper-Speech-to-Text-API](https://github.com/Evil0ctal/Whisper-Speech-to-Text-API)** project! This project provides developers with a fast and reliable API, enabling efficient transcription of various video and audio file formats into text using the [OpenAI Whisper](https://github.com/openai/whisper) model. It’s ideal for speech recognition, subtitle generation, and text analysis needs.
 
-* **GitHub 地址**： [Whisper-Speech-to-Text-API](https://github.com/Evil0ctal/Whisper-Speech-to-Text-API)
+## Project Link 📂
 
-## 🌟 特性
+* **GitHub** : [Whisper-Speech-to-Text-API](https://github.com/Evil0ctal/Whisper-Speech-to-Text-API)
 
-* **高性能 API 接口**：基于 FastAPI 实现异步操作，支持后台处理任务并将其存储在 SQLite 数据库中，实现任务可控管理。
-* **多格式支持**：支持音频文件、视频文件 (如 MP4) 等多种格式，转换基于 `ffmpeg`，确保高兼容性。
-* **CUDA 加速**：为有 GPU 的用户提供 CUDA 加速处理，显著提高转录速度。
-* **模型优化**：精细调优后的 Whisper 模型，更高的识别精度，适用于多语言音频识别。（敬请期待🔜）
-* **文本分析**：支持文本内容的进一步处理，如摘要生成、内容分析等，满足二次开发需求。
+## 🌟 Features
 
-## 🚀 快速部署
+* **High-Performance API** : Built with FastAPI to support asynchronous operations, including background task management and storage in an SQLite database for controlled task management.
+* **Multi-Format Support** : Supports audio and video files (e.g., MP4) and utilizes `ffmpeg` for broad compatibility.
+* **CUDA Acceleration** : For users with GPUs, offers CUDA-accelerated processing, significantly speeding up transcription.
+* **Model Optimization** : Fine-tuned Whisper model for higher recognition accuracy, supporting multilingual audio transcription. (Coming soon🔜)
+* **Text Analysis** : Enables further processing, such as summarization and content analysis, suitable for extended development needs.
+* **Automatic Language Detection** : Whisper model supports automatic language detection, using the first 30 seconds of the media file to auto-set the target language.
 
-1. **Python 环境**：确保 Python 版本 >= 3.8，本项目广泛使用 `asyncio` 库进行异步处理。
-2. **安装 FFmpeg**：根据你的系统来执行以下命令来安装 FFmpeg。
-   ```
-   # Ubuntu or Debian System
-   sudo apt update && sudo apt install ffmpeg
-   ​
-   # Arch Linux System
-   sudo pacman -S ffmpeg
-   ​
-   # MacOS System -> Homebrew
-   brew install ffmpeg
-   ​
-   # Windows System -> Chocolatey(Method one)
-   choco install ffmpeg
-   ​
-   # Windows System -> Scoop(Method two)
-   scoop install ffmpeg
-   ```
-3. **安装 CUDA**：如需 GPU 加速，请下载并安装 [CUDA](https://developer.nvidia.com/cuda-12-4-0-download-archive)，仅使用 CPU 的用户可跳过。
-4. **安装支持CUDA的PyTorch**: `python3 -m pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118`
-5. **安装项目依赖**: `pip install -r requirements.txt`
+## 🚀 Quick Deployment
 
-## ⚗️ 技术栈
+1. **Python Environment** : Ensure Python version >= 3.8. This project widely uses the `asyncio` library for asynchronous processing.
+2. **Install FFmpeg** : Install FFmpeg with the following commands based on your system.
 
-* **[Whisper](https://github.com/openai/whisper)** - 语音识别模型
-* **[ffmpeg](https://ffmpeg.org/)** - 音视频格式转换
-* **[torch](https://pytorch.org/)** - 深度学习框架
-* **[FastAPI](https://github.com/fastapi/fastapi)** - 高性能 API 框架
-* **[aiofile](https://github.com/Tinche/aiofiles)** - 异步文件操作
-* **[aiosqlite](https://github.com/omnilib/aiosqlite)** - 异步数据库操作
-* **[moviepy](https://github.com/Zulko/moviepy)** - 视频编辑
-* **[pydub](https://github.com/jiaaro/pydub)** - 音频编辑
+```bash
+# Ubuntu or Debian System
+sudo apt update && sudo apt install ffmpeg
 
-## 💡 项目结构
+# Arch Linux System
+sudo pacman -S ffmpeg
 
+# MacOS System -> Homebrew
+brew install ffmpeg
+
+# Windows System -> Chocolatey(Method one)
+choco install ffmpeg
+
+# Windows System -> Scoop(Method two)
+scoop install ffmpeg
 ```
+
+3. **Install CUDA** : To enable GPU acceleration, download and install [CUDA](https://developer.nvidia.com/cuda-12-4-0-download-archive); CPU-only users can skip this step.
+4. **Install CUDA-Supported PyTorch** : `python3 -m pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118`
+5. **Install Project Dependencies** : `pip install -r requirements.txt`
+
+## ⚗️ Technology Stack
+
+* **[Whisper](https://github.com/openai/whisper)** - Speech recognition model
+* **[ffmpeg](https://ffmpeg.org/)** - Audio and video format conversion
+* **[torch](https://pytorch.org/)** - Deep learning framework
+* **[FastAPI](https://github.com/fastapi/fastapi)** - High-performance API framework
+* **[aiofile](https://github.com/Tinche/aiofiles)** - Asynchronous file operations
+* **[aiosqlite](https://github.com/omnilib/aiosqlite)** - Asynchronous database operations
+* **[moviepy](https://github.com/Zulko/moviepy)** - Video editing
+* **[pydub](https://github.com/jiaaro/pydub)** - Audio editing
+
+## 💡 Project Structure
+
+```text
 ./📂 Whisper-Speech-to-Text-API/
-├── 📂 app/                        # 主应用目录
-│   ├── 📂 api/                    # API 路由
-│   │   ├── 📄 health_check.py     # 健康检查接口
-│   │   └── 📄 transcribe.py       # 转录功能接口
-│   ├── 📂 database/               # 数据库模块
-│   │   ├── 📄 database.py         # 数据库连接与初始化
-│   │   └── 📄 models.py           # 数据库模型定义
-│   ├── 📂 models/                 # 数据模型
-│   │   └── 📄 APIResponseModel.py # API 响应模型
-│   ├── 📂 services/               # 服务层逻辑
-│   │   ├── 📄 whisper_service.py  # Whisper 模型处理逻辑
-│   │   └── 📄 whisper_service_instance.py # Whisper 服务单例
-│   ├── 📂 utils/                  # 实用工具
-│   │   ├── 📄 file_utils.py       # 文件处理工具
-│   │   └── 📄 logging_utils.py    # 日志处理工具
-│   └── 📄 main.py                 # 应用启动入口
-├── 📂 config/                     # 配置文件
-│   └── 📄 settings.py             # 应用设置
-├── 📂 scripts/                    # 脚本文件
-│   ├── 📄 run_server.sh           # 服务器启动脚本
-│   └── 📄 setup.sh                # 环境初始化脚本
-├── 📁 log_files/                  # 📒 默认日志文件夹
-├── 📁 temp_files/                 # 📂 默认临时文件夹
-├── 📄 requirements.txt            # 依赖库列表
-├── 📄 start.py                    # 启动脚本
-└── 📄 tasks.db                    # 📊 默认数据库文件
+├── 📂 app/                      # Main app directory
+│   ├── 📂 api/                  # API routes
+│   │   ├── 📄 health_check.py   # Health check endpoint
+│   │   └── 📄 transcribe.py     # Transcription endpoint
+│   ├── 📂 database/             # Database module
+│   │   ├── 📄 database.py       # Database connection and initialization
+│   │   └── 📄 models.py         # Database models
+│   ├── 📂 models/               # Data models
+│   │   └── 📄 APIResponseModel.py # API response model
+│   ├── 📂 services/             # Service layer logic
+│   │   ├── 📄 whisper_service.py # Whisper model handling logic
+│   │   └── 📄 whisper_service_instance.py # Whisper service singleton
+│   ├── 📂 utils/                # Utilities
+│   │   ├── 📄 file_utils.py     # File handling utilities
+│   │   └── 📄 logging_utils.py  # Logging utilities
+│   └── 📄 main.py               # Application entry point
+├── 📂 config/                   # Configuration files
+│   └── 📄 settings.py           # Application settings
+├── 📂 scripts/                  # Scripts
+│   ├── 📄 run_server.sh         # Server start script
+│   └── 📄 setup.sh              # Environment setup script
+├── 📁 log_files/                # 📒 Default log folder
+├── 📁 temp_files/               # 📂 Default temp folder
+├── 📄 requirements.txt          # Dependency list
+├── 📄 start.py                  # Start script
+└── 📄 tasks.db                  # 📊 Default database file
 ```
 
-## 🛠️ 使用指南
+## 🛠️ User Guide
 
-- 切换到项目目录，使用下面的命令启动API服务：
-- `python3 start.py`
-- 随后你可以访问`http://localhost`来查看接口文档，并且在网页上测试。
+* Switch to the project directory, then start the API service with:
+* `python3 start.py`
+* You can then visit `http://localhost` to view the API documentation and test the endpoints on the web.
 
-### API 使用示例
+### API Usage Example
 
-- 添加一个识别任务
+* Add a transcription task
 
 ```curl
-​curl -X 'POST' \
+curl -X 'POST' \
   'http://127.0.0.1/transcribe/task/create' \
   -H 'accept: application/json' \
   -H 'Content-Type: multipart/form-data' \
@@ -112,7 +117,7 @@
   -F 'initial_prompt='
 ```
 
-- 响应
+- Response
 
 ```json
 {
@@ -157,7 +162,7 @@
 }
 ```
 
-- 查看任务结果
+- View task results
 
 ```curl
 curl -X 'GET' \
@@ -165,7 +170,7 @@ curl -X 'GET' \
   -H 'accept: application/json'
 ```
 
-- 响应
+- Response
 
 ```json
 {
@@ -830,12 +835,12 @@ curl -X 'GET' \
 }
 ```
 
-**在请求体中包含音频或视频文件，API 将返回转录的文本结果。**
+**Include an audio or video file in the request, and the API will return the transcribed text result.**
 
-### 文本分析与扩展功能
+### Text Analysis and Extended Functionality
 
-**转录完成的文本可以直接用于进一步处理，如内容摘要、语义分析等，适合二次分析或文本挖掘需求。**
+**The transcribed text can be used for further processing, such as content summarization and semantic analysis, suitable for secondary analysis or text mining needs.**
 
-## 贡献指南
+## Contribution Guide
 
-**非常欢迎大家提出意见和建议！可以通过 GitHub issue 与我们联系，如果希望贡献代码，请 fork 项目并提交 pull request。我们期待你的加入！💪**
+**Feedback and suggestions are highly welcome! Reach out through GitHub issues, and if you’d like to contribute, please fork the project and submit a pull request. We look forward to your participation! 💪**
