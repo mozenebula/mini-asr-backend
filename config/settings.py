@@ -16,6 +16,8 @@ class Settings:
         docs_url: str = "/"
         # 是否开启 debug 模式 | Whether to enable debug mode
         debug: bool = False
+        # 自动重载 | Auto reload
+        reload: bool = False
         # FastAPI 服务 IP | FastAPI service IP
         ip: str = "0.0.0.0"
         # FastAPI 服务端口 | FastAPI service port

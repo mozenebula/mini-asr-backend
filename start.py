@@ -42,5 +42,5 @@ if __name__ == "__main__":
     uvicorn.run('app.main:app',
                 host=Settings.FastAPISettings.ip,
                 port=Settings.FastAPISettings.port,
-                reload=True,
-                log_level="info")
+                reload=Settings.FastAPISettings.reload
+                )
