@@ -70,18 +70,18 @@ def configure_logging(
     logger = logging.getLogger(name)
     logger.setLevel(log_level)
 
-    # 防止重复添加处理器
+    # 防止重复添加处理器 | Prevent duplicate handlers
     if not logger.handlers:
         formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
 
-        # 创建日志目录
+        # 创建日志目录 | Create log directory
         if log_dir:
             log_dir = os.path.abspath(log_dir)
             os.makedirs(log_dir, exist_ok=True)
 
-        # 配置日志轮转处理器
+        # 配置日志轮转处理器 | Configure log rotation handler
         if log_file_prefix:
             log_file_name = f"{log_file_prefix}.log"
             log_file_path = os.path.join(log_dir, log_file_name)
@@ -90,16 +90,19 @@ def configure_logging(
                 when=when,
                 interval=interval,
                 backupCount=backup_count,
-                encoding=encoding
+                encoding=encoding,
+                # 使用延迟防止日志被锁定 | Use delay to prevent log locking
+                delay=True
             )
             rotating_file_handler.setFormatter(formatter)
-            # 设置备份文件名的时间格式
+            # 设置备份文件名的时间格式 | Set the time format of the backup file name
             rotating_file_handler.suffix = "%Y%m%d_%H%M%S.log"
             logger.addHandler(rotating_file_handler)
 
-        # 配置控制台处理器
+        # 配置控制台处理器 | Configure console handler
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 
     return logger
+

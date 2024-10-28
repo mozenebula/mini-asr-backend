@@ -34,14 +34,14 @@
 # No one yet...
 #
 # ==============================================================================
-
+import asyncio
 import os
 import uuid
 from typing import Optional
-
+from concurrent.futures import ThreadPoolExecutor
 import torch
 import whisper
-from fastapi import UploadFile, HTTPException, BackgroundTasks
+from fastapi import Request, UploadFile, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from pydub import AudioSegment
@@ -63,6 +63,9 @@ class WhisperService:
 
     Whisper service class for handling transcription and audio extraction of audio and video files.
     """
+
+    # 初始化静态线程池，所有实例共享 | Initialize static thread pool, shared by all instances
+    _executor = ThreadPoolExecutor()
 
     def __init__(self, model_name: str = None) -> None:
         # 配置日志记录器 | Configure logger
@@ -177,7 +180,8 @@ class WhisperService:
             self,
             file: UploadFile,
             decode_options: dict,
-            priority: str
+            priority: str,
+            request: Request
     ) -> Task:
         temp_file_path = await self.file_utils.save_uploaded_file(file)
         self.logger.debug(f"Audio file saved to temporary path: {temp_file_path}")
@@ -196,13 +200,18 @@ class WhisperService:
             session.add(task)
             await session.commit()
             task_id = task.id
+            # 设置任务输出链接 | Set task output URL
+            task.output_url = f"{request.url_for('get_task_result')}?task_id={task_id}"
+            await session.commit()
 
         self.logger.info(f"Created transcription task with ID: {task_id}")
         return task
 
     async def get_audio_duration(self, temp_file_path):
         self.logger.debug(f"Getting duration of audio file: {temp_file_path}")
-        audio = AudioSegment.from_file(temp_file_path)
+        audio = await asyncio.get_running_loop().run_in_executor(
+            WhisperService._executor, lambda: AudioSegment.from_file(temp_file_path)
+        )
         duration = len(audio) / 1000.0
         self.logger.debug(f"Audio file duration: {duration:.2f} seconds")
         return duration

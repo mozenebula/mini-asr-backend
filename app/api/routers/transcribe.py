@@ -103,7 +103,8 @@ async def create_transcription_task(
         task_info = await whisper_service.create_transcription_task(
             file=file,
             decode_options=decode_options,
-            priority=priority
+            priority=priority,
+            request=request
         )
         return ResponseModel(code=200,
                              router=str(request.url),
