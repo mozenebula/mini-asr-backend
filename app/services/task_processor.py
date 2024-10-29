@@ -16,24 +16,8 @@ from config.settings import Settings
 # 任务并发数 | Task concurrency
 max_concurrent_tasks: int = Settings.WhisperSettings.MAX_CONCURRENT_TASKS
 
-# TODO: 2024-10-28-Evil0ctal: 请查看下方的注释 | Please see the comments below
-"""
-[中文]
-当前代码中使用了 ThreadPoolExecutor 作为静态线程池，用于处理任务。
-ThreadPoolExecutor由于 GIL，在使用CPU进行任务处理时可能无法提供所需的并发性。
-在这种情况下，可以考虑使用 ProcessPoolExecutor 作为替代方案，以便在多核CPU上实现更好的并发性。
-但是如果是使用GPU进行任务处理，ThreadPoolExecutor 仍然是一个不错的选择。
-如果你有更好的建议，欢迎提出一个Issue或者Pull Request。
-
-[English]
-The current code uses ThreadPoolExecutor as a static thread pool for task processing.
-ThreadPoolExecutor may not provide the desired concurrency when using CPU for task processing due to the GIL.
-In such cases, consider using ProcessPoolExecutor as an alternative for better concurrency on multi-core CPUs.
-However, ThreadPoolExecutor is still a good choice if using a GPU for task processing.
-If you have better suggestions, feel free to raise an Issue or Pull Request.
-"""
 # 初始化静态线程池，所有实例共享 | Initialize static thread pool, shared by all instances
-_executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=max_concurrent_tasks)
+_executor: ThreadPoolExecutor = ThreadPoolExecutor()
 
 
 class TaskProcessor:
@@ -193,8 +177,8 @@ class TaskProcessor:
                     Created At  : {task.created_at}
                     Output URL  : {task.output_url}
                     Error       : {str(result)}
-                    Traceback   : {result.__traceback__}
-                    """
+                    """,
+                    exc_info=result
                 )
             else:
                 self.logger.info(f"Task {task.id} processed successfully.")

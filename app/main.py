@@ -34,12 +34,31 @@
 # No one yet...
 #
 # ==============================================================================
-
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.api.router import router as api_router
 from app.database.database import DatabaseManager
 from app.services.whisper_service_instance import whisper_service
 from config.settings import Settings
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    """应用启动前逻辑 | Application startup logic"""
+
+    # 初始化数据库 | Initialize the database
+    await DatabaseManager.initialize(DATABASE_URL)
+    # 启动任务处理器 | Start the task processor
+    whisper_service.start_task_processor()
+
+    # 等待生命周期完成 | Wait for the lifecycle to complete
+    yield
+
+    """应用关闭后逻辑 | Application shutdown logic"""
+
+    # 停止任务处理器 | Stop the task processor
+    whisper_service.stop_task_processor()
+
 
 # 创建 FastAPI 应用实例
 app = FastAPI(
@@ -47,7 +66,8 @@ app = FastAPI(
     description=Settings.FastAPISettings.description,
     version=Settings.FastAPISettings.version,
     docs_url=Settings.FastAPISettings.docs_url,
-    debug=Settings.FastAPISettings.debug
+    debug=Settings.FastAPISettings.debug,
+    lifespan=lifespan
 )
 
 # 数据库地址 | Database URL
@@ -68,19 +88,8 @@ tags_metadata = [
 # API 路由 | API Router
 app.include_router(api_router, prefix="/api")
 
-@app.on_event("startup")
-async def startup_event():
-    # 初始化数据库 | Initialize the database
-    await DatabaseManager.initialize(DATABASE_URL)
-    # 启动任务处理器 | Start the task processor
-    whisper_service.start_task_processor()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    # 停止任务处理器 | Stop the task processor
-    whisper_service.stop_task_processor()
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host=Settings.FastAPISettings.ip, port=Settings.FastAPISettings.port)
 
+    uvicorn.run(app, host=Settings.FastAPISettings.ip, port=Settings.FastAPISettings.port)
