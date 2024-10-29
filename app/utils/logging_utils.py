@@ -39,18 +39,19 @@ import logging
 import os
 import sys
 from logging.handlers import TimedRotatingFileHandler
+from config.settings import Settings
 from typing import Optional
 
 
 def configure_logging(
     name: Optional[str] = None,
-    log_level: int = logging.DEBUG,
-    log_dir: Optional[str] = './log_files',
-    log_file_prefix: Optional[str] = 'app',
-    when: str = 'midnight',
-    interval: int = 1,
-    backup_count: int = 7,
-    encoding: str = 'utf-8'
+    log_level: int = Settings.LogSettings.level,
+    log_dir: Optional[str] = Settings.LogSettings.log_dir,
+    log_file_prefix: Optional[str] = Settings.LogSettings.log_file_prefix,
+    when: str = Settings.LogSettings.when,
+    interval: int = Settings.LogSettings.interval,
+    backup_count: int = Settings.LogSettings.backup_count,
+    encoding: str = Settings.LogSettings.encoding
 ) -> logging.Logger:
     """
     一个日志记录器，支持日志轮转和控制台输出，使用 TimedRotatingFileHandler 处理器。
