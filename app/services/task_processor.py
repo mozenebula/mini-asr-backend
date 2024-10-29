@@ -16,8 +16,8 @@ from config.settings import Settings
 # 任务并发数 | Task concurrency
 max_concurrent_tasks: int = Settings.WhisperSettings.MAX_CONCURRENT_TASKS
 
+# TODO: 2024-10-28-Evil0ctal: 请查看下方的注释 | Please see the comments below
 """
-TODO: 2024-10-28-Evil0ctal
 [中文]
 当前代码中使用了 ThreadPoolExecutor 作为静态线程池，用于处理任务。
 ThreadPoolExecutor由于 GIL，在使用CPU进行任务处理时可能无法提供所需的并发性。
