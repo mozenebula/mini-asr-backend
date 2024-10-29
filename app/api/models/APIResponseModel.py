@@ -28,12 +28,6 @@
 #              )  |  \  `.___________|/    Whisper API Out of the Box (Where is my ⭐?)
 #              `--'   `--'
 # ==============================================================================
-#
-# Contributor Link, Thanks for your contribution:
-#
-# No one yet...
-#
-# ==============================================================================
 
 from datetime import datetime
 from typing import Any, Optional, Dict

@@ -28,19 +28,13 @@
 #              )  |  \  `.___________|/    Whisper API Out of the Box (Where is my ⭐?)
 #              `--'   `--'
 # ==============================================================================
-#
-# Contributor Link, Thanks for your contribution:
-#
-# No one yet...
-#
-# ==============================================================================
+
 import traceback
 from typing import Union, List, Optional
 
 from fastapi import Request, APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks, Query, status
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.services.whisper_service_instance import whisper_service
 from app.utils.logging_utils import configure_logging
 from app.database.database import DatabaseManager
 from app.api.models.APIResponseModel import ResponseModel, ErrorResponseModel
@@ -100,7 +94,7 @@ async def create_transcription_task(
             "clip_timestamps": clip_timestamps,
             "hallucination_silence_threshold": hallucination_silence_threshold
         }
-        task_info = await whisper_service.create_transcription_task(
+        task_info = await request.app.state.whisper_service.create_transcription_task(
             file=file,
             decode_options=decode_options,
             priority=priority,
@@ -224,6 +218,7 @@ async def get_task_result(
 @router.post("/extract-audio",
              summary="从视频文件中提取音频 / Extract audio from a video file")
 async def extract_audio(
+        request: Request,
         file: UploadFile = File(...,
                                 description="视频文件，支持的格式如 MP4, MKV 等 / Video file, supported formats like MP4, MKV etc."),
         sample_rate: int = Form(22050, description="音频的采样率（单位：Hz），例如 22050 或 44100。"),
@@ -245,7 +240,7 @@ async def extract_audio(
         FileResponse: 包含音频文件的响应。
     """
     try:
-        response = await whisper_service.extract_audio_from_video(
+        response = await request.app.state.whisper_service.extract_audio_from_video(
             file=file,
             sample_rate=sample_rate,
             bit_depth=bit_depth,

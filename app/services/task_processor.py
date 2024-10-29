@@ -1,16 +1,50 @@
+# ==============================================================================
+# Copyright (C) 2024 Evil0ctal
+#
+# This file is part of the Whisper-Speech-to-Text-API project.
+# Github: https://github.com/Evil0ctal/Whisper-Speech-to-Text-API
+#
+# This project is licensed under the Apache License 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+#                                     ,
+#              ,-.       _,---._ __  / \
+#             /  )    .-'       `./ /   \
+#            (  (   ,'            `/    /|
+#             \  `-"             \'\   / |
+#              `.              ,  \ \ /  |
+#               /`.          ,'-`----Y   |
+#              (            ;        |   '
+#              |  ,-.    ,-'         |  /
+#              |  | (   |  Evil0ctal | /
+#              )  |  \  `.___________|/    Whisper API Out of the Box (Where is my ⭐?)
+#              `--'   `--'
+# ==============================================================================
+
 import asyncio
-import threading
-import traceback
-import whisper
 import datetime
-from typing import List, Optional
-from sqlalchemy.ext.asyncio import AsyncSession
+import threading
+import time
+import traceback
+from concurrent.futures import ThreadPoolExecutor
+from typing import List
+
 from sqlalchemy import select, case
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database.database import DatabaseManager
 from app.database.models import Task, TaskStatus, TaskPriority
+from app.model_pool.async_model_pool import AsyncModelPool
 from app.utils.file_utils import FileUtils
 from app.utils.logging_utils import configure_logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from config.settings import Settings
 
 # 任务并发数 | Task concurrency
@@ -28,20 +62,20 @@ class TaskProcessor:
     """
 
     def __init__(self,
-                 model: whisper.Whisper,
+                 model_pool: AsyncModelPool,
                  file_utils: FileUtils,
                  db_manager: DatabaseManager) -> None:
         """
         初始化 TaskProcessor 实例，设置模型、文件工具和数据库管理器。
 
-        Initializes the TaskProcessor instance with the model, file utilities, and database manager.
+        Initializes the TaskProcessor instance with the model pool, file utilities, and database manager.
 
-        :param model: Whisper 模型实例，用于音频转录 | Whisper model instance for audio transcription
+        :param model_pool: AsyncModelPool 实例，用于模型管理 | AsyncModelPool instance for model management
         :param file_utils: FileUtils 实例，用于文件操作 | FileUtils instance for file operations
         :param db_manager: DatabaseManager 实例，用于数据库交互 | DatabaseManager instance for database interactions
         :return: None
         """
-        self.model: whisper.Whisper = model
+        self.model_pool: AsyncModelPool = model_pool
         self.file_utils: FileUtils = file_utils
         self.loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()
         self.thread: threading.Thread = threading.Thread(target=self.run_loop)
@@ -106,6 +140,11 @@ class TaskProcessor:
 
         :return: None
         """
+        # 记录上次日志输出的时间 | Record the time of the last log output
+        last_log_time = 0
+        # 日志输出间隔，单位为秒 | Log output interval in seconds
+        log_delay = 30
+
         while not self.shutdown_event.is_set():
             try:
                 async with self.db_manager.get_session() as session:
@@ -114,7 +153,10 @@ class TaskProcessor:
                     if tasks:
                         await self._process_multiple_tasks(tasks)
                     else:
-                        self.logger.info(f"No tasks to process, waiting for {self.task_status_check_interval} seconds.")
+                        current_time = time.time()
+                        if current_time - last_log_time >= log_delay:
+                            self.logger.info(f"No tasks to process, waiting for new tasks...")
+                            last_log_time = current_time
                         await asyncio.sleep(self.task_status_check_interval)
             except Exception as e:
                 self.logger.error(f"Error while pulling tasks from the database: {str(e)}")
@@ -143,7 +185,8 @@ class TaskProcessor:
             )
             .limit(limit)
         )
-        return result.scalars().all()
+        remaining_tasks = result.scalars().all()
+        return remaining_tasks
 
     async def _process_multiple_tasks(self, tasks: List[Task]) -> None:
         """
@@ -192,20 +235,6 @@ class TaskProcessor:
         :param task: 要处理的任务实例 | The task instance to process
         :return: None
         """
-
-        def transcribe_with_options(model: whisper.Whisper, file_path: str, options: Optional[dict]) -> dict:
-            """
-            执行模型的转录操作。
-
-            Performs the transcription operation using the model.
-
-            :param model: Whisper 模型实例 | Whisper model instance
-            :param file_path: 音频文件路径 | File path of the audio
-            :param options: 转录选项字典 | Dictionary of transcription options
-            :return: 转录结果字典 | Dictionary containing the transcription result
-            """
-            return model.transcribe(file_path, **options)
-
         try:
             self.logger.info(
                 f"""
@@ -220,23 +249,30 @@ class TaskProcessor:
                 """
             )
 
-            # 记录任务开始时间 | Record task start time
-            task_start_time: datetime.datetime = datetime.datetime.utcnow()
+            # 获取模型实例 | Acquire a model instance
+            model = asyncio.run(self.model_pool.get_model())
 
-            # 执行转录任务 | Perform transcription task
-            result = transcribe_with_options(self.model, task.file_path, task.decode_options or {})
+            try:
+                # 记录任务开始时间 | Record task start time
+                task_start_time: datetime.datetime = datetime.datetime.utcnow()
 
-            # 更新任务状态和结果 | Update task status and result
-            task_update = {
-                "status": TaskStatus.COMPLETED,
-                "language": result.get('language'),
-                "result": result,
-                "total_time": (datetime.datetime.utcnow() - task_start_time).total_seconds()
-            }
-            asyncio.run(self.db_manager.update_task(task.id, **task_update))
+                # 执行转录任务 | Perform transcription task
+                result = model.transcribe(task.file_path, **task.decode_options or {})
+
+                # 更新任务状态和结果 | Update task status and result
+                task_update = {
+                    "status": TaskStatus.COMPLETED,
+                    "language": result.get('language'),
+                    "result": result,
+                    "total_time": (datetime.datetime.utcnow() - task_start_time).total_seconds()
+                }
+                asyncio.run(self.db_manager.update_task(task.id, **task_update))
+
+            finally:
+                # 将模型实例归还到池中 | Return the model instance to the pool
+                asyncio.run(self.model_pool.return_model(model))
 
         except Exception as e:
-            # 更新任务状态为 FAILED，并提交更改 | Mark task as FAILED and submit changes
             task_update = {
                 "status": TaskStatus.FAILED,
                 "error_message": str(e)

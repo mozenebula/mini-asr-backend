@@ -39,13 +39,12 @@ import os
 import uuid
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
-import torch
-import whisper
 from fastapi import Request, UploadFile, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from pydub import AudioSegment
 
+from app.model_pool.async_model_pool import AsyncModelPool
 from app.database.database import DatabaseManager
 from app.database.models import Task
 from app.services.task_processor import TaskProcessor
@@ -67,7 +66,7 @@ class WhisperService:
     # 初始化静态线程池，所有实例共享 | Initialize static thread pool, shared by all instances
     _executor = ThreadPoolExecutor()
 
-    def __init__(self, model_name: str = None) -> None:
+    def __init__(self, model_pool: AsyncModelPool) -> None:
         # 配置日志记录器 | Configure logger
         self.logger = configure_logging(name=__name__)
 
@@ -79,26 +78,11 @@ class WhisperService:
             temp_dir=Settings.FileSettings.temp_files_dir
         )
 
-        # 尝试初始化 CUDA | Try to initialize CUDA
-        try:
-            torch.cuda.init()
-            self.logger.info("CUDA initialized successfully.")
-        except Exception as e:
-            self.logger.warning(f"Failed to initialize CUDA: {str(e)}")
-
-        # 选择设备和加载模型 | Select device and load model
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model_name = Settings.WhisperSettings.model_name if model_name is None else model_name
-        self.logger.info(f"Loading Whisper model '{self.model_name}' on device '{self.device}'.")
-        try:
-            self.model = whisper.load_model(self.model_name, device=self.device)
-            self.logger.info(f"Model '{self.model_name}' loaded successfully.")
-        except Exception as e:
-            self.logger.error(f"Failed to load Whisper model '{self.model_name}': {str(e)}")
-            raise RuntimeError(f"Failed to load model '{self.model_name}': {e}")
+        # 模型池 | Model pool
+        self.model_pool = model_pool
 
         # 初始化任务处理器 | Initialize task processor
-        self.task_processor = TaskProcessor(self.model, self.file_utils, db_manager)
+        self.task_processor = TaskProcessor(self.model_pool, self.file_utils, db_manager)
 
     async def extract_audio_from_video(
             self,

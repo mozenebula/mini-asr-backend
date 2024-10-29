@@ -28,33 +28,51 @@
 #              )  |  \  `.___________|/    Whisper API Out of the Box (Where is my ⭐?)
 #              `--'   `--'
 # ==============================================================================
-#
-# Contributor Link, Thanks for your contribution:
-#
-# No one yet...
-#
-# ==============================================================================
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.api.router import router as api_router
 from app.database.database import DatabaseManager
-from app.services.whisper_service_instance import whisper_service
+from app.model_pool.async_model_pool import AsyncModelPool
+from app.services.whisper_service import WhisperService
 from config.settings import Settings
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    """应用启动前逻辑 | Application startup logic"""
+    """
+    FastAPI 生命周期上下文管理器 | FastAPI Lifecycle context manager
+    :param application: FastAPI 应用实例 | FastAPI application instance
+    :return: None
+    """
 
     # 初始化数据库 | Initialize the database
-    await DatabaseManager.initialize(DATABASE_URL)
+    await DatabaseManager.initialize(Settings.DatabaseSettings.url)
+
+    # 实例化异步模型池 | Instantiate the asynchronous model pool
+    async_model_pool = AsyncModelPool(
+        model_name=Settings.WhisperSettings.model_name,
+        device=Settings.WhisperSettings.device,
+        download_root=Settings.WhisperSettings.download_root,
+        in_memory=Settings.WhisperSettings.in_memory,
+        min_size=Settings.AsyncModelPoolSettings.min_size,
+        max_size=Settings.AsyncModelPoolSettings.get_max_size(),
+        create_with_max_concurrent_tasks=Settings.AsyncModelPoolSettings.create_with_max_concurrent_tasks()
+    )
+    # 初始化模型池，加载模型，这可能需要一些时间 | Initialize the model pool, load the model, this may take some time
+    await async_model_pool.initialize_pool()
+
+    # 实例化 WhisperService | Instantiate WhisperService
+    whisper_service = WhisperService(model_pool=async_model_pool)
+
     # 启动任务处理器 | Start the task processor
     whisper_service.start_task_processor()
 
+    # 将 whisper_service 存储在应用的 state 中 | Store whisper_service in the app state
+    application.state.whisper_service = whisper_service
+
     # 等待生命周期完成 | Wait for the lifecycle to complete
     yield
-
-    """应用关闭后逻辑 | Application shutdown logic"""
 
     # 停止任务处理器 | Stop the task processor
     whisper_service.stop_task_processor()
@@ -69,9 +87,6 @@ app = FastAPI(
     debug=Settings.FastAPISettings.debug,
     lifespan=lifespan
 )
-
-# 数据库地址 | Database URL
-DATABASE_URL = Settings.DatabaseSettings.url
 
 # API Tags
 tags_metadata = [

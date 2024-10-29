@@ -1,7 +1,37 @@
-from dataclasses import dataclass
+# ==============================================================================
+# Copyright (C) 2024 Evil0ctal
+#
+# This file is part of the Whisper-Speech-to-Text-API project.
+# Github: https://github.com/Evil0ctal/Whisper-Speech-to-Text-API
+#
+# This project is licensed under the Apache License 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+#                                     ,
+#              ,-.       _,---._ __  / \
+#             /  )    .-'       `./ /   \
+#            (  (   ,'            `/    /|
+#             \  `-"             \'\   / |
+#              `.              ,  \ \ /  |
+#               /`.          ,'-`----Y   |
+#              (            ;        |   '
+#              |  ,-.    ,-'         |  /
+#              |  | (   |  Evil0ctal | /
+#              )  |  \  `.___________|/    Whisper API Out of the Box (Where is my ⭐?)
+#              `--'   `--'
+# ==============================================================================
+
+from typing import Optional
 
 
-@dataclass
 class Settings:
 
     # FastAPI 设置 | FastAPI settings
@@ -32,10 +62,36 @@ class Settings:
     class WhisperSettings:
         # 模型名称 | Model name
         model_name: str = "large-v3"
-        # Whisper同时处理的最大任务数，数字越大，资源占用越高，可能会导致性能下降 | The maximum number of tasks Whisper processes at the same time. The larger the number, the higher the resource consumption, which may lead to performance degradation
+        # 设备名称，如 "cpu" 或 "cuda", 为 None 时自动选择 | Device name, such as "cpu" or "cuda", automatically selected when None
+        device: Optional[str] = None
+        # 模型下载根目录 | Model download root directory
+        download_root: Optional[str] = None
+        # 是否在内存中加载模型 | Whether to load the model in memory
+        in_memory: bool = False
+        # 模型最大并发任务数，由于模型不是线程安全的，当并发大于1时，模型池会创建相同数量的模型实例，设置过大会造成性能问题以及未知错误！！！
+        # The maximum number of concurrent tasks for the model.
+        # Since the model is not thread-safe, when the concurrency is greater than 1,
+        # the model pool will create the same number of model instances.
+        # Setting it too large will cause performance problems and unknown errors!!!
         MAX_CONCURRENT_TASKS: int = 1
         # 检查任务状态的时间间隔（秒） | Time interval for checking task status (seconds)
         TASK_STATUS_CHECK_INTERVAL: int = 3
+
+    # 异步模型池设置 | Asynchronous model pool settings
+    class AsyncModelPoolSettings:
+        # 最小的模型池大小 | Minimum model pool size
+        min_size: int = 1
+
+        # 最大的模型池大小，建议跟 WhisperSettings.MAX_CONCURRENT_TASKS 保持一致
+        # Maximum model pool size, it is recommended to be consistent with WhisperSettings.MAX_CONCURRENT_TASKS
+        @classmethod
+        def get_max_size(cls) -> int:
+            return Settings.WhisperSettings.MAX_CONCURRENT_TASKS
+
+        # 是否在模型池初始化时以最大并发任务数创建模型实例 | Whether to create model instances with the maximum number of concurrent tasks when the model pool is initialized
+        @classmethod
+        def create_with_max_concurrent_tasks(cls) -> bool:
+            return True if cls.get_max_size() > 1 else False
 
     # 文件设置 | File settings
     class FileSettings:
@@ -76,4 +132,3 @@ class Settings:
         when: str = "midnight"
         # 日志文件切割间隔(天) | Log file cutting interval (days)
         interval: int = 1
-    
