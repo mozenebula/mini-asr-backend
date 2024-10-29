@@ -43,6 +43,7 @@ import uuid
 import re
 import stat
 import filetype
+import traceback
 
 from typing import List, Any, Optional
 from fastapi import UploadFile
@@ -141,12 +142,12 @@ class FileUtils:
         file_path = os.path.realpath(file_path)
         # 确保文件路径在 TEMP_DIR 内部 | Ensure file path is within TEMP_DIR
         if not file_path.startswith(os.path.realpath(self.TEMP_DIR) + os.sep):
-            self.logger.error("Invalid file path detected.")
+            self.logger.error(f"Invalid file path detected: {file_path}")
             raise ValueError("Invalid file path detected.")
 
         # 检查是否为符号链接 | Check if the path is a symbolic link
         if os.path.islink(file_path):
-            self.logger.error("Symbolic links are not allowed.")
+            self.logger.error(f"Symbolic links are not allowed: {file_path}")
             raise ValueError("Invalid file path detected.")
 
         try:
@@ -174,8 +175,8 @@ class FileUtils:
             self.logger.debug("File saved successfully.")
             return file_path
         except (OSError, IOError) as e:
-            error_msg = f"Failed to save file due to an exception: {str(e)}"
-            self.logger.error(error_msg)
+            self.logger.error(f"Failed to save file due to an exception: {str(e)}")
+            self.logger.error(traceback.format_exc())
             raise ValueError("An error occurred while saving the file.")
 
     async def save_uploaded_file(self, file: UploadFile) -> str:
@@ -231,6 +232,7 @@ class FileUtils:
             return file_path
         except (OSError, IOError, ValueError) as e:
             self.logger.error(f"Failed to save uploaded file due to an exception: {str(e)}")
+            self.logger.error(traceback.format_exc())
             raise ValueError("An error occurred while saving the uploaded file.")
 
     async def delete_files_in_batch(self, file_paths: List[str]) -> None:
@@ -255,6 +257,7 @@ class FileUtils:
             self.logger.debug("Batch of files deleted successfully.")
         except Exception as e:
             self.logger.error(f"Failed to delete batch of files due to an exception: {str(e)}")
+            self.logger.error(traceback.format_exc())
             raise ValueError("An error occurred while deleting files.")
 
     async def delete_file(self, file_path: str) -> None:
@@ -269,27 +272,29 @@ class FileUtils:
         file_path = os.path.realpath(file_path)
         # 确保文件路径在 TEMP_DIR 内部 | Ensure file path is within TEMP_DIR
         if not file_path.startswith(os.path.realpath(self.TEMP_DIR) + os.sep):
-            self.logger.warning("Attempted to delete file outside of TEMP_DIR.")
+            self.logger.warning(f"Attempted to delete file outside of TEMP_DIR: {file_path}")
             return
 
         # 检查是否为符号链接 | Check if the path is a symbolic link
         if os.path.islink(file_path):
-            self.logger.warning("Symbolic links are not allowed.")
+            self.logger.warning(f"Symbolic links are not allowed: {file_path}")
             return
 
         try:
             # 检查文件是否为常规文件 | Check if the file is a regular file
             file_stat = await asyncio.to_thread(os.lstat, file_path)
             if not stat.S_ISREG(file_stat.st_mode):
-                self.logger.warning("Not a regular file.")
+                self.logger.warning(f"Not a regular file: {file_path}")
                 return
             # 异步删除文件 | Asynchronously delete the file
             await asyncio.to_thread(os.remove, file_path)
-            self.logger.debug("Deleted file successfully.")
+            self.logger.debug(f"File deleted successfully: {file_path}")
         except FileNotFoundError:
-            self.logger.warning("File not found.")
+            self.logger.warning(f"File not found: {file_path}")
+            self.logger.error(traceback.format_exc())
         except (OSError, IOError) as e:
-            self.logger.error("Failed to delete file due to an exception.")
+            self.logger.error(f"Failed to delete file due to an exception: {str(e)}")
+            self.logger.error(traceback.format_exc())
             raise ValueError("An error occurred while deleting the file.")
 
     async def cleanup_temp_files(self) -> None:
@@ -316,6 +321,7 @@ class FileUtils:
                 self.logger.debug(f"All temporary files have been cleaned up.")
             except (OSError, IOError) as e:
                 self.logger.error(f"Failed to clean up temporary files due to an exception: {str(e)}")
+                self.logger.error(traceback.format_exc())
                 raise ValueError("An error occurred while cleaning up temporary files.")
 
     def _generate_safe_file_name(self, original_name: str) -> str:
@@ -361,6 +367,7 @@ class FileUtils:
                 return False
         except Exception as e:
             self.logger.error(f"Unable to determine file type: {str(e)}")
+            self.logger.error(traceback.format_exc())
             return False
 
     async def __aenter__(self) -> 'FileUtils':

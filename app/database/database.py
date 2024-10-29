@@ -35,13 +35,13 @@
 #
 # ==============================================================================
 
+import traceback
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Optional, List
 from contextlib import asynccontextmanager
-
 from app.database.models import Task, Base
 from app.utils.logging_utils import configure_logging
 
@@ -75,6 +75,7 @@ class DatabaseManager:
             logger.info("Database tables created successfully.")
         except SQLAlchemyError as e:
             logger.error(f"Error initializing database tables: {e}")
+            logger.error(traceback.format_exc())
             raise
 
     @classmethod
@@ -92,6 +93,7 @@ class DatabaseManager:
                 return task.to_dict() if task else None
             except SQLAlchemyError as e:
                 logger.error(f"Error fetching task by ID {task_id}: {e}")
+                logger.error(traceback.format_exc())
                 return None
 
     async def add_task(self, task: Task):
@@ -102,6 +104,7 @@ class DatabaseManager:
                 await session.commit()
             except SQLAlchemyError as e:
                 logger.error(f"Error adding task: {e}")
+                logger.error(traceback.format_exc())
                 await session.rollback()
 
     async def update_task(self, task_id: int, **kwargs) -> Optional[dict]:
@@ -117,6 +120,7 @@ class DatabaseManager:
                 return task.to_dict()
             except SQLAlchemyError as e:
                 logger.error(f"Error updating task ID {task_id}: {e}")
+                logger.error(traceback.format_exc())
                 await session.rollback()
                 return None
 
@@ -132,6 +136,7 @@ class DatabaseManager:
                 return False
             except SQLAlchemyError as e:
                 logger.error(f"Error deleting task ID {task_id}: {e}")
+                logger.error(traceback.format_exc())
                 await session.rollback()
                 return False
 
@@ -144,4 +149,5 @@ class DatabaseManager:
                 return [task.to_dict() for task in tasks]
             except SQLAlchemyError as e:
                 logger.error(f"Error fetching tasks: {e}")
+                logger.error(traceback.format_exc())
                 return []

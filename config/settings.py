@@ -32,6 +32,10 @@ class Settings:
     class WhisperSettings:
         # 模型名称 | Model name
         model_name: str = "large-v3"
+        # Whisper同时处理的最大任务数，数字越大，资源占用越高，可能会导致性能下降 | The maximum number of tasks Whisper processes at the same time. The larger the number, the higher the resource consumption, which may lead to performance degradation
+        MAX_CONCURRENT_TASKS: int = 1
+        # 检查任务状态的时间间隔（秒） | Time interval for checking task status (seconds)
+        TASK_STATUS_CHECK_INTERVAL: int = 3
 
     # 文件设置 | File settings
     class FileSettings:
@@ -40,7 +44,7 @@ class Settings:
         # 是否限制上传文件大小 | Whether to limit the size of uploaded files
         limit_file_size: bool = True
         # 最大上传文件大小（字节）| Maximum upload file size (bytes)
-        max_file_size: int = 2147483648
+        max_file_size: int = 2 * 1024 * 1024 * 1024
         # 临时文件目录 | Temporary file directory
         temp_files_dir: str = "./temp_files"
         # 是否在处理后删除临时文件 | Whether to delete temporary files after processing
