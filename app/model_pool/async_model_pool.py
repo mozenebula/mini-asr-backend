@@ -78,7 +78,8 @@ class AsyncModelPool:
                  faster_whisper_download_root: Optional[str],
 
                  # 模型池设置 | Model Pool Settings
-                 min_size: int = 1, max_size: int = 3,
+                 min_size: int = 1,
+                 max_size: int = 3,
                  create_with_max_concurrent_tasks: bool = True,
                  ):
         """
@@ -239,22 +240,28 @@ class AsyncModelPool:
             """)
 
             # 创建模型实例 | Create model instance
-            model = await asyncio.to_thread(
-                whisper.load_model,
-                self.openai_whisper_model_name,
-                device=self.openai_whisper_device,
-                download_root=self.openai_whisper_download_root,
-                in_memory=self.openai_whisper_in_memory
-            ) if self.engine == "openai_whisper" else await asyncio.to_thread(
-                WhisperModel,
-                self.fast_whisper_model_size_or_path,
-                device=self.fast_whisper_device,
-                device_index=self.faster_whisper_device_index,
-                compute_type=self.fast_whisper_compute_type,
-                cpu_threads=self.fast_whisper_cpu_threads,
-                num_workers=self.fast_whisper_num_workers,
-                download_root=self.fast_whisper_download_root
-            )
+
+            if self.engine == "openai_whisper":
+                model = await asyncio.to_thread(
+                    whisper.load_model,
+                    self.openai_whisper_model_name,
+                    device=self.openai_whisper_device,
+                    download_root=self.openai_whisper_download_root,
+                    in_memory=self.openai_whisper_in_memory
+                )
+            elif self.engine == "faster_whisper":
+                model = await asyncio.to_thread(
+                    WhisperModel,
+                    self.fast_whisper_model_size_or_path,
+                    device=self.fast_whisper_device,
+                    device_index=self.faster_whisper_device_index,
+                    compute_type=self.fast_whisper_compute_type,
+                    cpu_threads=self.fast_whisper_cpu_threads,
+                    num_workers=self.fast_whisper_num_workers,
+                    download_root=self.fast_whisper_download_root
+                )
+            else:
+                raise ValueError("Invalid engine specified. Choose 'openai_whisper' or 'faster_whisper'.")
 
             # 将模型放入池中 | Put model into the pool
             await self.pool.put(model)

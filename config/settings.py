@@ -64,7 +64,7 @@ class Settings:
         # Since the model is not thread-safe, when the concurrency is greater than 1,
         # the model pool will create the same number of model instances.
         # Setting it too large will cause performance problems and unknown errors!!!
-        MAX_CONCURRENT_TASKS: int = 3
+        MAX_CONCURRENT_TASKS: int = 1
         # 检查任务状态的时间间隔（秒），如果设置过小可能会导致数据库查询频繁，设置过大可能会导致任务状态更新不及时。
         # Time interval for checking task status (seconds). If set too small, it may cause frequent database queries.
         TASK_STATUS_CHECK_INTERVAL: int = 3
@@ -152,7 +152,3 @@ class Settings:
         encoding: str = "utf-8"
         # 日志文件备份数 | Log file backup count
         backup_count: int = 7
-        # 日志文件切割时间 | Log file cutting time
-        when: str = "midnight"
-        # 日志文件切割间隔(天) | Log file cutting interval (days)
-        interval: int = 1

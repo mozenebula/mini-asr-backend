@@ -219,7 +219,7 @@ class TaskProcessor:
                     Priority    : {task.priority}
                     File        : {task.file_name}
                     Size        : {task.file_size_bytes} bytes
-                    Duration    : {task.duration:.2f} seconds
+                    Duration    : {task.file_duration:.2f} seconds
                     Created At  : {task.created_at}
                     Output URL  : {task.output_url}
                     Error       : {str(result)}
@@ -247,7 +247,7 @@ class TaskProcessor:
                 Priority    : {task.priority}
                 File        : {task.file_name}
                 Size        : {task.file_size_bytes} bytes
-                Duration    : {task.duration:.2f} seconds
+                Duration    : {task.file_duration:.2f} seconds
                 Created At  : {task.created_at}
                 Output URL  : {task.output_url}
                 """
@@ -274,6 +274,10 @@ class TaskProcessor:
                 else:
                     raise ValueError(f"Trying to process task with unsupported engine: {self.model_pool.engine}")
 
+                # 记录任务结束时间 | Record task end time
+                task_end_time: datetime.datetime = datetime.datetime.utcnow()
+                task_processing_time = (task_end_time - task_start_time).total_seconds()
+
                 self.logger.info(
                     f"""
                     Task processed successfully:
@@ -282,10 +286,11 @@ class TaskProcessor:
                     Priority    : {task.priority}
                     File        : {task.file_name}
                     Size        : {task.file_size_bytes} bytes
-                    Duration    : {task.duration:.2f} seconds
+                    Duration    : {task.file_duration:.2f} seconds
                     Created At  : {task.created_at}
                     Output URL  : {task.output_url}
                     Language    : {language}
+                    Processing Time: {task_processing_time:.2f} seconds
                     """
                 )
 
@@ -294,7 +299,7 @@ class TaskProcessor:
                     "status": TaskStatus.COMPLETED,
                     "language": language,
                     "result": result,
-                    "total_time": (datetime.datetime.utcnow() - task_start_time).total_seconds()
+                    "task_processing_time": task_processing_time
                 }
                 asyncio.run(self.db_manager.update_task(task.id, **task_update))
 
@@ -316,7 +321,7 @@ class TaskProcessor:
                 Priority    : {task.priority}
                 File        : {task.file_name}
                 Size        : {task.file_size_bytes} bytes
-                Duration    : {task.duration:.2f} seconds
+                Duration    : {task.file_duration:.2f} seconds
                 Created At  : {task.created_at}
                 Output URL  : {task.output_url}
                 Error       : {str(e)}

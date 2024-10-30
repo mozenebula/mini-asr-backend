@@ -35,7 +35,11 @@ from app.api.router import router as api_router
 from app.database.database import DatabaseManager
 from app.model_pool.async_model_pool import AsyncModelPool
 from app.services.whisper_service import WhisperService
+from app.utils.logging_utils import configure_logging
 from config.settings import Settings
+
+# 配置日志记录器 | Configure the logger
+logger = configure_logging(name=__name__)
 
 
 @asynccontextmanager
@@ -45,6 +49,16 @@ async def lifespan(application: FastAPI):
     :param application: FastAPI 应用实例 | FastAPI application instance
     :return: None
     """
+    # 检查是否使用了 'faster_whisper' 引擎，并且 'MAX_CONCURRENT_TASKS' 设置大于 1
+    # 如果是，则强制将 'MAX_CONCURRENT_TASKS' 设置为 1，这将有助于避免性能问题
+    # Check if 'faster_whisper' engine is used and 'MAX_CONCURRENT_TASKS' setting is greater than 1
+    # If so, force 'MAX_CONCURRENT_TASKS' to 1, this will help to avoid performance issues
+    if Settings.AsyncModelPoolSettings.engine == "faster_whisper" and Settings.WhisperServiceSettings.MAX_CONCURRENT_TASKS > 1:
+        logger.warning(f"""
+            Detected 'faster_whisper' engine with 'MAX_CONCURRENT_TASKS' had been set to {Settings.WhisperServiceSettings.MAX_CONCURRENT_TASKS}.
+            Will force 'MAX_CONCURRENT_TASKS' to 1 for 'faster_whisper' engine, this will help to avoid performance issues.
+            """)
+        Settings.WhisperServiceSettings.MAX_CONCURRENT_TASKS = 1
 
     # 初始化数据库 | Initialize the database
     db_manager = DatabaseManager()
@@ -121,7 +135,6 @@ tags_metadata = [
 
 # API 路由 | API Router
 app.include_router(api_router, prefix="/api")
-
 
 if __name__ == "__main__":
     import uvicorn

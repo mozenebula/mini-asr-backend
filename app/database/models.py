@@ -67,6 +67,8 @@ class Task(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     # 更新时间 | Update date
     updated_at = Column(DateTime, onupdate=datetime.datetime.utcnow)
+    # 处理任务花费的总时间 | Total time spent processing the task
+    task_processing_time = Column(Float, nullable=True)
 
     # 文件路径 | File path
     file_path = Column(String, nullable=False)
@@ -75,7 +77,7 @@ class Task(Base):
     # 文件大小 | File size
     file_size_bytes = Column(Integer)
     # 音频时长 | Audio duration
-    duration = Column(Float)
+    file_duration = Column(Float)
 
     # 解码选项 | Decode options
     decode_options = Column(JSON)
@@ -91,8 +93,6 @@ class Task(Base):
     # 输出结果链接 | Output URL
     output_url = Column(String, nullable=True)
 
-    # 总用时 | Total time
-    total_time = Column(Float, nullable=True)
     # 检测到的语言 | Detected language
     language = Column(String, nullable=True)
 
@@ -102,17 +102,17 @@ class Task(Base):
             'id': self.id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'task_processing_time': self.task_processing_time,
             'file_path': self.file_path,
             'file_name': self.file_name,
             'file_size_bytes': self.file_size_bytes,
-            'duration': self.duration,
+            'file_duration': self.file_duration,
             'decode_options': self.decode_options,
             'priority': self.priority,
             'status': self.status.value,
             'result': self.result,
             'error_message': self.error_message,
             'output_url': self.output_url,
-            'total_time': self.total_time,
             'language': self.language
         }
 

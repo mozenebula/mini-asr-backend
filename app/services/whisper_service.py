@@ -192,7 +192,7 @@ class WhisperService:
                 file_name=file.filename,
                 file_size_bytes=os.path.getsize(temp_file_path),
                 decode_options=decode_options,
-                duration=duration,
+                file_duration=duration,
                 priority=priority
             )
             session.add(task)
