@@ -268,7 +268,7 @@ class TaskProcessor:
                     language = result.get('language')
                 elif self.model_pool.engine == "faster_whisper":
                     # TODO: 从任务中获取解码选项 | Get decode options from the task -2024年10月29日18:35:08
-                    segments, info = model.transcribe(task.file_path, beam_size=5)
+                    segments, info = model.transcribe(task.file_path, **task.decode_options or {})
                     result = {"transcription": "".join([seg.text for seg in segments])}
                     language = info.language
                 else:

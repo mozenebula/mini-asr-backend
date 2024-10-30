@@ -61,9 +61,7 @@ async def create_transcription_task(
         priority: TaskPriority = Form(TaskPriority.NORMAL, description="任务优先级 / Task priority"),
         temperature: Union[float, List[float]] = Form(0.2,
                                                       description="采样温度 / Sampling temperature (can be a single value or a list of values)"),
-        verbose: bool = Form(False, description="是否显示详细信息 / Whether to display detailed information"),
         compression_ratio_threshold: float = Form(2.4, description="压缩比阈值 / Compression ratio threshold"),
-        logprob_threshold: float = Form(-1.0, description="对数概率阈值 / Log probability threshold"),
         no_speech_threshold: float = Form(0.6, description="无声部分的概率阈值 / No-speech probability threshold"),
         condition_on_previous_text: bool = Form(True,
                                                 description="在连续语音中更准确地理解上下文 / Condition on previous text"),
@@ -82,9 +80,7 @@ async def create_transcription_task(
     try:
         decode_options = {
             "temperature": temperature,
-            "verbose": verbose,
             "compression_ratio_threshold": compression_ratio_threshold,
-            "logprob_threshold": logprob_threshold,
             "no_speech_threshold": no_speech_threshold,
             "condition_on_previous_text": condition_on_previous_text,
             "initial_prompt": initial_prompt,
