@@ -167,4 +167,5 @@ cython_debug/
 
 # Temporary files
 /app/temp_files/
-/temp_files/
+/temp_files/*
+*.lock
