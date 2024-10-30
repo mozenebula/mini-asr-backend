@@ -157,7 +157,7 @@ class AsyncModelPool:
         :return: 已选择的设备名称 | The selected device name
         :raises ValueError: 如果指定的设备无效或不可用 | If the specified device is invalid or unavailable
         """
-        if device not in {None, "cpu", "cuda"}:
+        if device not in {None, "cpu", "cuda", "auto"}:
             raise ValueError("Invalid device specified. Choose 'cpu', 'cuda', or leave it as None to auto-select.")
 
         selected_device = device or ("cuda" if torch.cuda.is_available() else "cpu")

@@ -96,745 +96,336 @@
 - 添加一个识别任务
 
 ```curl
-​curl -X 'POST' \
-  'http://127.0.0.1/transcribe/task/create' \
-  -H 'accept: application/json' \
-  -H 'Content-Type: multipart/form-data' \
-  -F 'verbose=false' \
-  -F 'priority=normal' \
-  -F 'logprob_threshold=-1' \
-  -F 'prepend_punctuations="'\''“¿([{-' \
-  -F 'no_speech_threshold=0.6' \
-  -F 'clip_timestamps=0' \
-  -F 'word_timestamps=false' \
-  -F 'temperature=0.2' \
-  -F 'hallucination_silence_threshold=0' \
-  -F 'condition_on_previous_text=true' \
-  -F 'file=@Example.mp4;type=video/mp4' \
-  -F 'compression_ratio_threshold=2.4' \
-  -F 'append_punctuations="'\''.。,，!！?？:：”)]}、' \
-  -F 'initial_prompt='
+PLACEHOLDER
 ```
 
 - 响应
 
 ```json
-{
-  "code": 200,
-  "router": "http://127.0.0.1/transcribe/task/create",
-  "params": {},
-  "data": {
-    "id": 1,
-    "created_at": "2024-10-27T06:40:55.413738",
-    "updated_at": null,
-    "status": "queued",
-    "file_path": "C:\\Users\\Evil0ctal\\PycharmProjects\\Whisper-Speech-to-Text-API\\temp_files\\02fe0aa4265e43ed91532107b9f6303b.mp4",
-    "file_name": "Example.mp4",
-    "file_size_bytes": 5273783,
-    "duration": 39.612,
-    "decode_options": {
-      "temperature": [
-        0.2
-      ],
-      "verbose": false,
-      "compression_ratio_threshold": 2.4,
-      "logprob_threshold": -1,
-      "no_speech_threshold": 0.6,
-      "condition_on_previous_text": true,
-      "initial_prompt": "",
-      "word_timestamps": false,
-      "prepend_punctuations": "\"'“¿([{-",
-      "append_punctuations": "\"'.。,，!！?？:：”)]}、",
-      "clip_timestamps": [
-        0
-      ],
-      "hallucination_silence_threshold": 0
-    },
-    "result": null,
-    "error_message": null,
-    "attempts": 0,
-    "priority": "normal",
-    "output_url": null,
-    "language": null,
-    "progress": 0
-  }
-}
-```
-
-- 查看任务结果
-
-```curl
-curl -X 'GET' \
-  'http://127.0.0.1/transcribe/tasks/result?task_id=1' \
-  -H 'accept: application/json'
-```
-
-- 响应
-
-```json
-{
-  "id": 1,
-  "created_at": "2024-10-27T06:40:55.413738",
-  "updated_at": "2024-10-27T06:45:38.557478",
-  "status": "completed",
-  "file_path": "C:\\Users\\Evil0ctal\\PycharmProjects\\Whisper-Speech-to-Text-API\\temp_files\\02fe0aa4265e43ed91532107b9f6303b.mp4",
-  "file_name": "Example.mp4",
-  "file_size_bytes": 5273783,
-  "duration": 39.612,
-  "decode_options": {
-    "temperature": [
-      0.2
-    ],
-    "verbose": false,
-    "compression_ratio_threshold": 2.4,
-    "logprob_threshold": -1,
-    "no_speech_threshold": 0.6,
-    "condition_on_previous_text": true,
-    "initial_prompt": "",
-    "word_timestamps": false,
-    "prepend_punctuations": "\"'“¿([{-",
-    "append_punctuations": "\"'.。,，!！?？:：”)]}、",
-    "clip_timestamps": [
-      0
-    ],
-    "hallucination_silence_threshold": 0
-  },
-  "result": {
-    "text": "我们并没有在一起只是聊了很久的天我知道我们并没有感情每天我们就是问问在干嘛我们就是早安晚安拿大游戏发发呆没话讲就发表情报号下去因为相较于情感的挥霍爱的执照总是要显得繁琐些要好像从来都不好气我是怎么样的人我半夜不睡觉的时候在干嘛摩卡就牵是什么意思我的社交圈我的朋友我的爱好你好像通通不在乎我只是你刚好寂寞的时候我撞了上去刚好我心里还挺知道我们有点两万个的话题当然我稍微能入你的眼刚好而已我们都在场口是心非却又希望对方有所察觉但很多时候沉默都比解释热和悲伤来得更容易",
-    "segments": [
-      {
-        "id": 0,
-        "seek": 0,
-        "start": 0,
-        "end": 1.28,
-        "text": "我们并没有在一起",
-        "tokens": [
-          50365,
-          15003,
-          3509,
-          114,
-          17944,
-          3581,
-          29567,
-          50429
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 1,
-        "seek": 0,
-        "start": 1.28,
-        "end": 2.64,
-        "text": "只是聊了很久的天",
-        "tokens": [
-          50429,
-          36859,
-          40096,
-          2289,
-          4563,
-          25320,
-          1546,
-          6135,
-          50497
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 2,
-        "seek": 0,
-        "start": 2.64,
-        "end": 4.2,
-        "text": "我知道我们并没有感情",
-        "tokens": [
-          50497,
-          33838,
-          15003,
-          3509,
-          114,
-          17944,
-          9709,
-          10570,
-          50575
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 3,
-        "seek": 0,
-        "start": 4.2,
-        "end": 5.84,
-        "text": "每天我们就是问问在干嘛",
-        "tokens": [
-          50575,
-          23664,
-          6135,
-          15003,
-          5620,
-          22064,
-          22064,
-          3581,
-          26111,
-          20722,
-          50657
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 4,
-        "seek": 0,
-        "start": 5.84,
-        "end": 7.2,
-        "text": "我们就是早安晚安",
-        "tokens": [
-          50657,
-          15003,
-          5620,
-          21176,
-          16206,
-          27080,
-          16206,
-          50725
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 5,
-        "seek": 0,
-        "start": 7.2,
-        "end": 8.52,
-        "text": "拿大游戏发发呆",
-        "tokens": [
-          50725,
-          24351,
-          3582,
-          9592,
-          116,
-          1486,
-          237,
-          28926,
-          28926,
-          3606,
-          228,
-          50791
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 6,
-        "seek": 0,
-        "start": 8.52,
-        "end": 10.56,
-        "text": "没话讲就发表情报号下去",
-        "tokens": [
-          50791,
-          10062,
-          21596,
-          39255,
-          3111,
-          28926,
-          17571,
-          10570,
-          49817,
-          26987,
-          34473,
-          50893
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 7,
-        "seek": 0,
-        "start": 10.56,
-        "end": 12.44,
-        "text": "因为相较于情感的挥霍",
-        "tokens": [
-          50893,
-          34627,
-          15106,
-          9830,
-          225,
-          37732,
-          10570,
-          9709,
-          1546,
-          8501,
-          98,
-          18594,
-          235,
-          50987
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 8,
-        "seek": 0,
-        "start": 12.44,
-        "end": 14.76,
-        "text": "爱的执照总是要显得繁琐些",
-        "tokens": [
-          50987,
-          27324,
-          1546,
-          3416,
-          100,
-          32150,
-          33440,
-          1541,
-          4275,
-          1431,
-          122,
-          5916,
-          23141,
-          223,
-          10568,
-          238,
-          13824,
-          51103
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 9,
-        "seek": 0,
-        "start": 14.76,
-        "end": 15.92,
-        "text": "要好像从来都不好气",
-        "tokens": [
-          51103,
-          4275,
-          33242,
-          35630,
-          6912,
-          7182,
-          15769,
-          42204,
-          51161
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 10,
-        "seek": 0,
-        "start": 15.92,
-        "end": 16.96,
-        "text": "我是怎么样的人",
-        "tokens": [
-          51161,
-          15914,
-          48200,
-          29979,
-          51213
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 11,
-        "seek": 0,
-        "start": 16.96,
-        "end": 18.96,
-        "text": "我半夜不睡觉的时候在干嘛",
-        "tokens": [
-          51213,
-          1654,
-          30018,
-          30124,
-          1960,
-          40490,
-          24447,
-          49873,
-          3581,
-          26111,
-          20722,
-          51313
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 12,
-        "seek": 0,
-        "start": 18.96,
-        "end": 20.400000000000002,
-        "text": "摩卡就牵是什么意思",
-        "tokens": [
-          51313,
-          34783,
-          102,
-          32681,
-          3111,
-          6935,
-          113,
-          1541,
-          10440,
-          16697,
-          51385
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 13,
-        "seek": 0,
-        "start": 20.400000000000002,
-        "end": 21.44,
-        "text": "我的社交圈",
-        "tokens": [
-          51385,
-          14200,
-          27658,
-          28455,
-          2523,
-          230,
-          51437
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 14,
-        "seek": 0,
-        "start": 21.44,
-        "end": 22.32,
-        "text": "我的朋友",
-        "tokens": [
-          51437,
-          14200,
-          19828,
-          51481
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 15,
-        "seek": 0,
-        "start": 22.32,
-        "end": 23,
-        "text": "我的爱好",
-        "tokens": [
-          51481,
-          14200,
-          27324,
-          2131,
-          51515
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 16,
-        "seek": 0,
-        "start": 23,
-        "end": 24.52,
-        "text": "你好像通通不在乎我",
-        "tokens": [
-          51515,
-          26410,
-          12760,
-          19550,
-          19550,
-          1960,
-          3581,
-          2930,
-          236,
-          1654,
-          51591
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 17,
-        "seek": 0,
-        "start": 24.52,
-        "end": 25.84,
-        "text": "只是你刚好寂寞的时候",
-        "tokens": [
-          51591,
-          36859,
-          2166,
-          49160,
-          2131,
-          4510,
-          224,
-          4510,
-          252,
-          49873,
-          51657
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 18,
-        "seek": 0,
-        "start": 25.84,
-        "end": 26.96,
-        "text": "我撞了上去",
-        "tokens": [
-          51657,
-          1654,
-          20559,
-          252,
-          2289,
-          5708,
-          6734,
-          51713
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 19,
-        "seek": 0,
-        "start": 26.96,
-        "end": 28.240000000000002,
-        "text": "刚好我心里还挺",
-        "tokens": [
-          51713,
-          49160,
-          2131,
-          1654,
-          7945,
-          15759,
-          14852,
-          41046,
-          51777
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.21540247599283854,
-        "compression_ratio": 1.4733727810650887,
-        "no_speech_prob": 3.287499161785945e-10
-      },
-      {
-        "id": 20,
-        "seek": 2824,
-        "start": 28.24,
-        "end": 30.36,
-        "text": "知道我们有点两万个的话题",
-        "tokens": [
-          50365,
-          7758,
-          15003,
-          2412,
-          12579,
-          36257,
-          23570,
-          7549,
-          44575,
-          30716,
-          50471
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.2133265408602628,
-        "compression_ratio": 1.1271676300578035,
-        "no_speech_prob": 0.005595638416707516
-      },
-      {
-        "id": 21,
-        "seek": 2824,
-        "start": 30.36,
-        "end": 31.919999999999998,
-        "text": "当然我稍微能入你的眼",
-        "tokens": [
-          50471,
-          40486,
-          1654,
-          10415,
-          235,
-          39152,
-          8225,
-          14028,
-          18961,
-          25281,
-          50549
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.2133265408602628,
-        "compression_ratio": 1.1271676300578035,
-        "no_speech_prob": 0.005595638416707516
-      },
-      {
-        "id": 22,
-        "seek": 2824,
-        "start": 31.919999999999998,
-        "end": 32.839999999999996,
-        "text": "刚好而已",
-        "tokens": [
-          50549,
-          49160,
-          2131,
-          48420,
-          50595
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.2133265408602628,
-        "compression_ratio": 1.1271676300578035,
-        "no_speech_prob": 0.005595638416707516
-      },
-      {
-        "id": 23,
-        "seek": 2824,
-        "start": 32.839999999999996,
-        "end": 34.44,
-        "text": "我们都在场口是心非",
-        "tokens": [
-          50595,
-          15003,
-          7182,
-          3581,
-          50255,
-          18144,
-          1541,
-          7945,
-          12107,
-          50675
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.2133265408602628,
-        "compression_ratio": 1.1271676300578035,
-        "no_speech_prob": 0.005595638416707516
-      },
-      {
-        "id": 24,
-        "seek": 2824,
-        "start": 34.44,
-        "end": 36.239999999999995,
-        "text": "却又希望对方有所察觉",
-        "tokens": [
-          50675,
-          5322,
-          112,
-          17047,
-          29955,
-          8713,
-          9249,
-          2412,
-          5966,
-          47550,
-          24447,
-          50765
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.2133265408602628,
-        "compression_ratio": 1.1271676300578035,
-        "no_speech_prob": 0.005595638416707516
-      },
-      {
-        "id": 25,
-        "seek": 2824,
-        "start": 36.239999999999995,
-        "end": 37.08,
-        "text": "但很多时候",
-        "tokens": [
-          50765,
-          8395,
-          20778,
-          29111,
-          50807
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.2133265408602628,
-        "compression_ratio": 1.1271676300578035,
-        "no_speech_prob": 0.005595638416707516
-      },
-      {
-        "id": 26,
-        "seek": 2824,
-        "start": 37.08,
-        "end": 39.599999999999994,
-        "text": "沉默都比解释热和悲伤来得更容易",
-        "tokens": [
-          50807,
-          3308,
-          231,
-          6173,
-          246,
-          7182,
-          11706,
-          17278,
-          5873,
-          232,
-          23661,
-          255,
-          12565,
-          14696,
-          110,
-          7384,
-          97,
-          6912,
-          5916,
-          19002,
-          49212,
-          50933
-        ],
-        "temperature": 0.2,
-        "avg_logprob": -0.2133265408602628,
-        "compression_ratio": 1.1271676300578035,
-        "no_speech_prob": 0.005595638416707516
-      }
-    ],
-    "language": "zh"
-  },
-  "error_message": null,
-  "attempts": 0,
-  "priority": "normal",
-  "output_url": null,
-  "language": null,
-  "progress": 0
-}
+PLACEHOLDER
 ```
 
 **在请求体中包含音频或视频文件，API 将返回转录的文本结果。**
+
+### 性能测试
+
+- 测试环境与硬件配置
+  - CPU: 13th Gen Intel(R) Core(TM) i9-13950HX 24核 32线程 @ 2.20 GHz
+  - GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+  - 内存: 64GB
+  - 系统: Windows 11
+
+> 单列模式测试
+
+- 我们使用 `faster whisper` 模型作为引擎，然后使用 `CUDA` 进行加速。
+- 使用`large-v3`作为推理模型。
+- 异步模型池的最大并发数`MAX_CONCURRENT_TASKS`设置为 1。
+- 启动项目耗时：
+    ```text
+    2024-10-29 23:55:33,994 - app.database.database - INFO - Database engine and session factory initialized.
+    2024-10-29 23:55:34,015 - app.database.database - INFO - Database tables created successfully.
+    2024-10-29 23:55:34,047 - app.model_pool.async_model_pool - INFO - Initializing AsyncModelPool with 1 instances...
+    2024-10-29 23:55:34,048 - app.model_pool.async_model_pool - INFO - 
+                Attempting to create a new model instance:
+                Engine           : faster_whisper
+                Model name       : large-v3
+                Device           : auto
+                Current pool size: 0
+                
+    2024-10-29 23:55:37,243 - app.model_pool.async_model_pool - INFO - 
+                Successfully created and added a new model instance to the pool.
+                Engine           : faster_whisper
+                Model name       : large-v3
+                Device           : auto
+                Current pool size: 1
+                
+    2024-10-29 23:55:37,243 - app.model_pool.async_model_pool - INFO - Successfully initialized AsyncModelPool with 1 instances.
+    2024-10-29 23:55:37,244 - app.utils.file_utils - DEBUG - Temporary directory set to C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files
+    2024-10-29 23:55:37,246 - app.services.task_processor - INFO - TaskProcessor started.
+    2024-10-29 23:55:37,251 - app.services.task_processor - INFO - No tasks to process, waiting for new tasks...
+    INFO:     Application startup complete.
+    INFO:     Uvicorn running on http://0.0.0.0:80 (Press CTRL+C to quit)
+    ```
+- 使用一个时长39秒的短视频作为测试文件，连续发送5个请求，每个请求将创建一个后台任务。
+- 任务日志，总耗时为 32 秒，且主线程无阻塞。
+    ```text
+    2024-10-30 00:02:04,216 - app.utils.file_utils - DEBUG - Generated unique file name: 2b9278d72bed4af8b4a735494cfeeffe.mp4
+  2024-10-30 00:02:04,216 - app.utils.file_utils - DEBUG - Name uploaded file to: 2b9278d72bed4af8b4a735494cfeeffe.mp4
+  2024-10-30 00:02:04,223 - app.utils.file_utils - DEBUG - Uploaded file saved successfully.
+  2024-10-30 00:02:04,223 - app.services.whisper_service - DEBUG - Audio file saved to temporary path: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\2b9278d72bed4af8b4a735494cfeeffe.mp4
+  2024-10-30 00:02:04,224 - app.services.whisper_service - DEBUG - Getting duration of audio file: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\2b9278d72bed4af8b4a735494cfeeffe.mp4
+  2024-10-30 00:02:04,410 - app.services.whisper_service - DEBUG - Audio file duration: 39.61 seconds
+  2024-10-30 00:02:04,431 - app.services.whisper_service - INFO - Created transcription task with ID: 1
+  INFO:     127.0.0.1:57648 - "POST /api/transcribe/task/create HTTP/1.1" 200 OK
+  2024-10-30 00:02:04,980 - app.utils.file_utils - DEBUG - Generated unique file name: a30adc4c40ed49a8ac620fc64e86eb6f.mp4
+  2024-10-30 00:02:04,980 - app.utils.file_utils - DEBUG - Name uploaded file to: a30adc4c40ed49a8ac620fc64e86eb6f.mp4
+  2024-10-30 00:02:04,987 - app.utils.file_utils - DEBUG - Uploaded file saved successfully.
+  2024-10-30 00:02:04,988 - app.services.whisper_service - DEBUG - Audio file saved to temporary path: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\a30adc4c40ed49a8ac620fc64e86eb6f.mp4
+  2024-10-30 00:02:04,988 - app.services.whisper_service - DEBUG - Getting duration of audio file: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\a30adc4c40ed49a8ac620fc64e86eb6f.mp4
+  2024-10-30 00:02:05,194 - app.services.whisper_service - DEBUG - Audio file duration: 39.61 seconds
+  2024-10-30 00:02:05,217 - app.services.whisper_service - INFO - Created transcription task with ID: 2
+  INFO:     127.0.0.1:57648 - "POST /api/transcribe/task/create HTTP/1.1" 200 OK
+  2024-10-30 00:02:05,730 - app.utils.file_utils - DEBUG - Generated unique file name: 34756286f2854d88bda330fc902cd088.mp4
+  2024-10-30 00:02:05,730 - app.utils.file_utils - DEBUG - Name uploaded file to: 34756286f2854d88bda330fc902cd088.mp4
+  2024-10-30 00:02:05,736 - app.utils.file_utils - DEBUG - Uploaded file saved successfully.
+  2024-10-30 00:02:05,737 - app.services.whisper_service - DEBUG - Audio file saved to temporary path: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\34756286f2854d88bda330fc902cd088.mp4
+  2024-10-30 00:02:05,737 - app.services.whisper_service - DEBUG - Getting duration of audio file: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\34756286f2854d88bda330fc902cd088.mp4
+  2024-10-30 00:02:05,960 - app.services.whisper_service - DEBUG - Audio file duration: 39.61 seconds
+  2024-10-30 00:02:05,981 - app.services.whisper_service - INFO - Created transcription task with ID: 3
+  INFO:     127.0.0.1:57648 - "POST /api/transcribe/task/create HTTP/1.1" 200 OK
+  2024-10-30 00:02:06,382 - app.utils.file_utils - DEBUG - Generated unique file name: 200de82c66d34ea186434328a4d5564f.mp4
+  2024-10-30 00:02:06,382 - app.utils.file_utils - DEBUG - Name uploaded file to: 200de82c66d34ea186434328a4d5564f.mp4
+  2024-10-30 00:02:06,392 - app.utils.file_utils - DEBUG - Uploaded file saved successfully.
+  2024-10-30 00:02:06,392 - app.services.whisper_service - DEBUG - Audio file saved to temporary path: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\200de82c66d34ea186434328a4d5564f.mp4
+  2024-10-30 00:02:06,392 - app.services.whisper_service - DEBUG - Getting duration of audio file: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\200de82c66d34ea186434328a4d5564f.mp4
+  2024-10-30 00:02:06,627 - app.services.whisper_service - DEBUG - Audio file duration: 39.61 seconds
+  2024-10-30 00:02:06,653 - app.services.whisper_service - INFO - Created transcription task with ID: 4
+  INFO:     127.0.0.1:57648 - "POST /api/transcribe/task/create HTTP/1.1" 200 OK
+  2024-10-30 00:02:07,090 - app.utils.file_utils - DEBUG - Generated unique file name: d3785a40417447b295ee187ced6364dd.mp4
+  2024-10-30 00:02:07,090 - app.utils.file_utils - DEBUG - Name uploaded file to: d3785a40417447b295ee187ced6364dd.mp4
+  2024-10-30 00:02:07,100 - app.utils.file_utils - DEBUG - Uploaded file saved successfully.
+  2024-10-30 00:02:07,100 - app.services.whisper_service - DEBUG - Audio file saved to temporary path: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\d3785a40417447b295ee187ced6364dd.mp4
+  2024-10-30 00:02:07,100 - app.services.whisper_service - DEBUG - Getting duration of audio file: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\d3785a40417447b295ee187ced6364dd.mp4
+  2024-10-30 00:02:07,215 - app.services.task_processor - INFO - 
+                  Processing queued task:
+                  ID          : 1
+                  Engine      : faster_whisper
+                  Priority    : TaskPriority.NORMAL
+                  File        : Example.mp4
+                  Size        : 5273783 bytes
+                  Duration    : 39.61 seconds
+                  Created At  : 2024-10-30 07:02:04.412974
+                  Output URL  : http://127.0.0.1/api/transcribe/tasks/result?task_id=1
+                  
+  2024-10-30 00:02:07,216 - app.model_pool.async_model_pool - INFO - Attempting to retrieve a model instance from the pool...
+  2024-10-30 00:02:07,216 - app.model_pool.async_model_pool - INFO - 
+              Model instance successfully retrieved from the pool.
+              Current pool size: 1 / Max size: 1
+              
+  2024-10-30 00:02:07,342 - app.services.whisper_service - DEBUG - Audio file duration: 39.61 seconds
+  2024-10-30 00:02:07,618 - app.services.whisper_service - INFO - Created transcription task with ID: 5
+  INFO:     127.0.0.1:57648 - "POST /api/transcribe/task/create HTTP/1.1" 200 OK
+  2024-10-30 00:02:14,482 - app.services.task_processor - INFO - 
+                      Task processed successfully:
+                      ID          : 1
+                      Engine      : faster_whisper
+                      Priority    : TaskPriority.NORMAL
+                      File        : Example.mp4
+                      Size        : 5273783 bytes
+                      Duration    : 39.61 seconds
+                      Created At  : 2024-10-30 07:02:04.412974
+                      Output URL  : http://127.0.0.1/api/transcribe/tasks/result?task_id=1
+                      Language    : zh
+                      
+  2024-10-30 00:02:14,494 - app.model_pool.async_model_pool - INFO - 
+              Model instance successfully returned to the pool.
+              Current pool size (after return): 1
+              
+  2024-10-30 00:02:14,496 - app.utils.file_utils - DEBUG - File deleted successfully: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\2b9278d72bed4af8b4a735494cfeeffe.mp4
+  2024-10-30 00:02:14,497 - app.services.task_processor - INFO - Task 1 processed successfully.
+  2024-10-30 00:02:14,500 - app.services.task_processor - INFO - 
+                  Processing queued task:
+                  ID          : 2
+                  Engine      : faster_whisper
+                  Priority    : TaskPriority.NORMAL
+                  File        : Example.mp4
+                  Size        : 5273783 bytes
+                  Duration    : 39.61 seconds
+                  Created At  : 2024-10-30 07:02:05.196961
+                  Output URL  : http://127.0.0.1/api/transcribe/tasks/result?task_id=2
+                  
+  2024-10-30 00:02:14,500 - app.model_pool.async_model_pool - INFO - Attempting to retrieve a model instance from the pool...
+  2024-10-30 00:02:14,500 - app.model_pool.async_model_pool - INFO - 
+              Model instance successfully retrieved from the pool.
+              Current pool size: 1 / Max size: 1
+              
+  2024-10-30 00:02:20,043 - app.services.task_processor - INFO - 
+                      Task processed successfully:
+                      ID          : 2
+                      Engine      : faster_whisper
+                      Priority    : TaskPriority.NORMAL
+                      File        : Example.mp4
+                      Size        : 5273783 bytes
+                      Duration    : 39.61 seconds
+                      Created At  : 2024-10-30 07:02:05.196961
+                      Output URL  : http://127.0.0.1/api/transcribe/tasks/result?task_id=2
+                      Language    : zh
+                      
+  2024-10-30 00:02:20,056 - app.model_pool.async_model_pool - INFO - 
+              Model instance successfully returned to the pool.
+              Current pool size (after return): 1
+              
+  2024-10-30 00:02:20,058 - app.utils.file_utils - DEBUG - File deleted successfully: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\a30adc4c40ed49a8ac620fc64e86eb6f.mp4
+  2024-10-30 00:02:20,059 - app.services.task_processor - INFO - Task 2 processed successfully.
+  2024-10-30 00:02:20,061 - app.services.task_processor - INFO - 
+                  Processing queued task:
+                  ID          : 3
+                  Engine      : faster_whisper
+                  Priority    : TaskPriority.NORMAL
+                  File        : Example.mp4
+                  Size        : 5273783 bytes
+                  Duration    : 39.61 seconds
+                  Created At  : 2024-10-30 07:02:05.962820
+                  Output URL  : http://127.0.0.1/api/transcribe/tasks/result?task_id=3
+                  
+  2024-10-30 00:02:20,062 - app.model_pool.async_model_pool - INFO - Attempting to retrieve a model instance from the pool...
+  2024-10-30 00:02:20,062 - app.model_pool.async_model_pool - INFO - 
+              Model instance successfully retrieved from the pool.
+              Current pool size: 1 / Max size: 1
+              
+  2024-10-30 00:02:25,533 - app.services.task_processor - INFO - 
+                      Task processed successfully:
+                      ID          : 3
+                      Engine      : faster_whisper
+                      Priority    : TaskPriority.NORMAL
+                      File        : Example.mp4
+                      Size        : 5273783 bytes
+                      Duration    : 39.61 seconds
+                      Created At  : 2024-10-30 07:02:05.962820
+                      Output URL  : http://127.0.0.1/api/transcribe/tasks/result?task_id=3
+                      Language    : zh
+                      
+  2024-10-30 00:02:25,546 - app.model_pool.async_model_pool - INFO - 
+              Model instance successfully returned to the pool.
+              Current pool size (after return): 1
+              
+  2024-10-30 00:02:25,548 - app.utils.file_utils - DEBUG - File deleted successfully: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\34756286f2854d88bda330fc902cd088.mp4
+  2024-10-30 00:02:25,549 - app.services.task_processor - INFO - Task 3 processed successfully.
+  2024-10-30 00:02:25,551 - app.services.task_processor - INFO - 
+                  Processing queued task:
+                  ID          : 4
+                  Engine      : faster_whisper
+                  Priority    : TaskPriority.NORMAL
+                  File        : Example.mp4
+                  Size        : 5273783 bytes
+                  Duration    : 39.61 seconds
+                  Created At  : 2024-10-30 07:02:06.629327
+                  Output URL  : http://127.0.0.1/api/transcribe/tasks/result?task_id=4
+                  
+  2024-10-30 00:02:25,552 - app.model_pool.async_model_pool - INFO - Attempting to retrieve a model instance from the pool...
+  2024-10-30 00:02:25,552 - app.model_pool.async_model_pool - INFO - 
+              Model instance successfully retrieved from the pool.
+              Current pool size: 1 / Max size: 1
+              
+  2024-10-30 00:02:30,910 - app.services.task_processor - INFO - 
+                      Task processed successfully:
+                      ID          : 4
+                      Engine      : faster_whisper
+                      Priority    : TaskPriority.NORMAL
+                      File        : Example.mp4
+                      Size        : 5273783 bytes
+                      Duration    : 39.61 seconds
+                      Created At  : 2024-10-30 07:02:06.629327
+                      Output URL  : http://127.0.0.1/api/transcribe/tasks/result?task_id=4
+                      Language    : zh
+                      
+  2024-10-30 00:02:30,922 - app.model_pool.async_model_pool - INFO - 
+              Model instance successfully returned to the pool.
+              Current pool size (after return): 1
+              
+  2024-10-30 00:02:30,924 - app.utils.file_utils - DEBUG - File deleted successfully: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\200de82c66d34ea186434328a4d5564f.mp4
+  2024-10-30 00:02:30,925 - app.services.task_processor - INFO - Task 4 processed successfully.
+  2024-10-30 00:02:30,927 - app.services.task_processor - INFO - 
+                  Processing queued task:
+                  ID          : 5
+                  Engine      : faster_whisper
+                  Priority    : TaskPriority.NORMAL
+                  File        : Example.mp4
+                  Size        : 5273783 bytes
+                  Duration    : 39.61 seconds
+                  Created At  : 2024-10-30 07:02:07.344753
+                  Output URL  : http://127.0.0.1/api/transcribe/tasks/result?task_id=5
+                  
+  2024-10-30 00:02:30,928 - app.model_pool.async_model_pool - INFO - Attempting to retrieve a model instance from the pool...
+  2024-10-30 00:02:30,928 - app.model_pool.async_model_pool - INFO - 
+              Model instance successfully retrieved from the pool.
+              Current pool size: 1 / Max size: 1
+              
+  2024-10-30 00:02:36,374 - app.services.task_processor - INFO - 
+                      Task processed successfully:
+                      ID          : 5
+                      Engine      : faster_whisper
+                      Priority    : TaskPriority.NORMAL
+                      File        : Example.mp4
+                      Size        : 5273783 bytes
+                      Duration    : 39.61 seconds
+                      Created At  : 2024-10-30 07:02:07.344753
+                      Output URL  : http://127.0.0.1/api/transcribe/tasks/result?task_id=5
+                      Language    : zh
+                      
+  2024-10-30 00:02:36,390 - app.model_pool.async_model_pool - INFO - 
+              Model instance successfully returned to the pool.
+              Current pool size (after return): 1
+              
+  2024-10-30 00:02:36,392 - app.utils.file_utils - DEBUG - File deleted successfully: C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files\d3785a40417447b295ee187ced6364dd.mp4
+  2024-10-30 00:02:36,393 - app.services.task_processor - INFO - Task 5 processed successfully.
+  2024-10-30 00:02:36,396 - app.services.task_processor - INFO - No tasks to process, waiting for new tasks...
+    ```
+
+> 并发模式测试
+
+- 我们使用 `faster whisper` 模型作为引擎，然后使用 `CUDA` 进行加速。
+- 使用`large-v3`作为推理模型。
+- 异步模型池的最大并发数`MAX_CONCURRENT_TASKS`设置为 3。
+  - 启动项目耗时：
+      ```text
+      2024-10-30 00:06:14,792 - app.database.database - INFO - Database engine and session factory initialized.
+      2024-10-30 00:06:14,811 - app.database.database - INFO - Database tables created successfully.
+      2024-10-30 00:06:14,832 - app.model_pool.async_model_pool - INFO - Initializing AsyncModelPool with 3 instances...
+      2024-10-30 00:06:14,832 - app.model_pool.async_model_pool - INFO - 
+              Attempting to create a new model instance:
+              Engine           : faster_whisper
+              Model name       : large-v3
+              Device           : auto
+              Current pool size: 0
+            
+      2024-10-30 00:06:14,833 - app.model_pool.async_model_pool - INFO - 
+              Attempting to create a new model instance:
+              Engine           : faster_whisper
+              Model name       : large-v3
+              Device           : auto
+              Current pool size: 0
+            
+      2024-10-30 00:06:14,834 - app.model_pool.async_model_pool - INFO - 
+              Attempting to create a new model instance:
+              Engine           : faster_whisper
+              Model name       : large-v3
+              Device           : auto
+              Current pool size: 0
+            
+      2024-10-30 00:06:20,943 - app.model_pool.async_model_pool - INFO - 
+              Successfully created and added a new model instance to the pool.
+              Engine           : faster_whisper
+              Model name       : large-v3
+              Device           : auto
+              Current pool size: 1
+            
+      2024-10-30 00:06:21,402 - app.model_pool.async_model_pool - INFO - 
+              Successfully created and added a new model instance to the pool.
+              Engine           : faster_whisper
+              Model name       : large-v3
+              Device           : auto
+              Current pool size: 2
+            
+      2024-10-30 00:06:21,702 - app.model_pool.async_model_pool - INFO - 
+              Successfully created and added a new model instance to the pool.
+              Engine           : faster_whisper
+              Model name       : large-v3
+              Device           : auto
+              Current pool size: 3
+            
+      2024-10-30 00:06:21,702 - app.model_pool.async_model_pool - INFO - Successfully initialized AsyncModelPool with 3 instances.
+      2024-10-30 00:06:21,703 - app.utils.file_utils - DEBUG - Temporary directory set to C:\Users\Evil0ctal\PycharmProjects\Whisper-Speech-to-Text-API\temp_files
+      2024-10-30 00:06:21,705 - app.services.task_processor - INFO - TaskProcessor started.
+      2024-10-30 00:06:21,710 - app.services.task_processor - INFO - No tasks to process, waiting for new tasks...
+      INFO:     Application startup complete.
+      INFO:     Uvicorn running on http://0.0.0.0:80 (Press CTRL+C to quit)
+      ````
+- 使用一个时长39秒的短视频作为测试文件，连续发送5个请求，每个请求将创建一个后台任务。
+- 任务日志，总耗时为 32 秒，且主线程无阻塞。
+    ```text
+    2024
+    ```
 
 ### 文本分析与扩展功能
 

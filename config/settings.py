@@ -64,7 +64,7 @@ class Settings:
         # Since the model is not thread-safe, when the concurrency is greater than 1,
         # the model pool will create the same number of model instances.
         # Setting it too large will cause performance problems and unknown errors!!!
-        MAX_CONCURRENT_TASKS: int = 1
+        MAX_CONCURRENT_TASKS: int = 3
         # 检查任务状态的时间间隔（秒），如果设置过小可能会导致数据库查询频繁，设置过大可能会导致任务状态更新不及时。
         # Time interval for checking task status (seconds). If set too small, it may cause frequent database queries.
         TASK_STATUS_CHECK_INTERVAL: int = 3
@@ -84,8 +84,8 @@ class Settings:
     class FasterWhisperSettings:
         # 模型名称 | Model name
         faster_whisper_model_size_or_path: str = "large-v3"
-        # 设备名称，如 "cpu" 或 "cuda", 为 None 时自动选择 | Device name, such as "cpu" or "cuda", automatically selected when None
-        faster_whisper_device: str = "cuda"
+        # 设备名称，如 "cpu" 或 "cuda", 为 'auto' 时自动选择 | Device name, such as "cpu" or "cuda", automatically selected when 'auto'
+        faster_whisper_device: str = "auto"
         # 设备ID，当 faster_whisper_device 为 "cuda" 时有效 | Device ID, valid when faster_whisper_device is "cuda"
         faster_whisper_device_index: int = 0
         # 模型推理计算类型 | Model inference calculation type

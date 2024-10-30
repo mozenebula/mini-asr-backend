@@ -274,6 +274,21 @@ class TaskProcessor:
                 else:
                     raise ValueError(f"Trying to process task with unsupported engine: {self.model_pool.engine}")
 
+                self.logger.info(
+                    f"""
+                    Task processed successfully:
+                    ID          : {task.id}
+                    Engine      : {task.engine_name}
+                    Priority    : {task.priority}
+                    File        : {task.file_name}
+                    Size        : {task.file_size_bytes} bytes
+                    Duration    : {task.duration:.2f} seconds
+                    Created At  : {task.created_at}
+                    Output URL  : {task.output_url}
+                    Language    : {language}
+                    """
+                )
+
                 # 更新任务状态和结果 | Update task status and result
                 task_update = {
                     "status": TaskStatus.COMPLETED,
