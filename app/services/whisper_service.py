@@ -28,12 +28,7 @@
 #              )  |  \  `.___________|/    Whisper API Out of the Box (Where is my ⭐?)
 #              `--'   `--'
 # ==============================================================================
-#
-# Contributor Link, Thanks for your contribution:
-#
-# No one yet...
-#
-# ==============================================================================
+
 import asyncio
 import os
 import uuid
@@ -52,8 +47,8 @@ from app.utils.file_utils import FileUtils
 from app.utils.logging_utils import configure_logging
 from config.settings import Settings
 
-# 初始化数据库管理器
-db_manager = DatabaseManager()
+# 初始化静态线程池，所有实例共享 | Initialize static thread pool, shared by all instances
+_executor = ThreadPoolExecutor()
 
 
 class WhisperService:
@@ -63,12 +58,27 @@ class WhisperService:
     Whisper service class for handling transcription and audio extraction of audio and video files.
     """
 
-    # 初始化静态线程池，所有实例共享 | Initialize static thread pool, shared by all instances
-    _executor = ThreadPoolExecutor()
+    def __init__(self,
+                 model_pool: AsyncModelPool,
+                 db_manager: DatabaseManager,
+                 max_concurrent_tasks: int,
+                 task_status_check_interval: int
+                 ) -> None:
 
-    def __init__(self, model_pool: AsyncModelPool) -> None:
         # 配置日志记录器 | Configure logger
         self.logger = configure_logging(name=__name__)
+
+        # 模型池 | Model pool
+        self.model_pool = model_pool
+
+        # 数据库管理器 | Database manager
+        self.db_manager = db_manager
+
+        # 最大并发任务数 | Maximum concurrent tasks
+        self.max_concurrent_tasks = max_concurrent_tasks
+
+        # 任务状态检查间隔 | Task status check interval
+        self.task_status_check_interval = task_status_check_interval
 
         # 初始化 FileUtils 实例 | Initialize FileUtils instance
         self.file_utils = FileUtils(
@@ -78,11 +88,14 @@ class WhisperService:
             temp_dir=Settings.FileSettings.temp_files_dir
         )
 
-        # 模型池 | Model pool
-        self.model_pool = model_pool
-
         # 初始化任务处理器 | Initialize task processor
-        self.task_processor = TaskProcessor(self.model_pool, self.file_utils, db_manager)
+        self.task_processor = TaskProcessor(
+            model_pool=self.model_pool,
+            file_utils=self.file_utils,
+            db_manager=self.db_manager,
+            max_concurrent_tasks=self.max_concurrent_tasks,
+            task_status_check_interval=self.task_status_check_interval
+        )
 
     async def extract_audio_from_video(
             self,
@@ -172,8 +185,9 @@ class WhisperService:
 
         duration = await self.get_audio_duration(temp_file_path)
 
-        async with db_manager.get_session() as session:
+        async with self.db_manager.get_session() as session:
             task = Task(
+                engine_name=self.model_pool.engine,
                 file_path=temp_file_path,
                 file_name=file.filename,
                 file_size_bytes=os.path.getsize(temp_file_path),
@@ -194,7 +208,7 @@ class WhisperService:
     async def get_audio_duration(self, temp_file_path):
         self.logger.debug(f"Getting duration of audio file: {temp_file_path}")
         audio = await asyncio.get_running_loop().run_in_executor(
-            WhisperService._executor, lambda: AudioSegment.from_file(temp_file_path)
+            _executor, lambda: AudioSegment.from_file(temp_file_path)
         )
         duration = len(audio) / 1000.0
         self.logger.debug(f"Audio file duration: {duration:.2f} seconds")

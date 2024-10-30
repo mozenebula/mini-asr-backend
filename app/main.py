@@ -47,23 +47,42 @@ async def lifespan(application: FastAPI):
     """
 
     # 初始化数据库 | Initialize the database
-    await DatabaseManager.initialize(Settings.DatabaseSettings.url)
+    db_manager = DatabaseManager()
+    await db_manager.initialize(Settings.DatabaseSettings.url)
 
     # 实例化异步模型池 | Instantiate the asynchronous model pool
-    async_model_pool = AsyncModelPool(
-        model_name=Settings.WhisperSettings.model_name,
-        device=Settings.WhisperSettings.device,
-        download_root=Settings.WhisperSettings.download_root,
-        in_memory=Settings.WhisperSettings.in_memory,
+    model_pool = AsyncModelPool(
+        # 模型池设置 | Model Pool Settings
+        engine=Settings.AsyncModelPoolSettings.engine,
         min_size=Settings.AsyncModelPoolSettings.min_size,
         max_size=Settings.AsyncModelPoolSettings.get_max_size(),
-        create_with_max_concurrent_tasks=Settings.AsyncModelPoolSettings.create_with_max_concurrent_tasks()
+        create_with_max_concurrent_tasks=Settings.AsyncModelPoolSettings.create_with_max_concurrent_tasks(),
+
+        # openai_whisper 引擎设置 | openai_whisper Engine Settings
+        openai_whisper_model_name=Settings.OpenAIWhisperSettings.openai_whisper_model_name,
+        openai_whisper_device=Settings.OpenAIWhisperSettings.openai_whisper_device,
+        openai_whisper_download_root=Settings.OpenAIWhisperSettings.openai_whisper_download_root,
+        openai_whisper_in_memory=Settings.OpenAIWhisperSettings.openai_whisper_in_memory,
+
+        # faster_whisper 引擎设置 | faster_whisper Engine Settings
+        faster_whisper_model_size_or_path=Settings.FasterWhisperSettings.faster_whisper_model_size_or_path,
+        faster_whisper_device=Settings.FasterWhisperSettings.faster_whisper_device,
+        faster_whisper_device_index=Settings.FasterWhisperSettings.faster_whisper_device_index,
+        faster_whisper_compute_type=Settings.FasterWhisperSettings.faster_whisper_compute_type,
+        faster_whisper_cpu_threads=Settings.FasterWhisperSettings.faster_whisper_cpu_threads,
+        faster_whisper_num_workers=Settings.FasterWhisperSettings.faster_whisper_num_workers,
+        faster_whisper_download_root=Settings.FasterWhisperSettings.faster_whisper_download_root
     )
     # 初始化模型池，加载模型，这可能需要一些时间 | Initialize the model pool, load the model, this may take some time
-    await async_model_pool.initialize_pool()
+    await model_pool.initialize_pool()
 
     # 实例化 WhisperService | Instantiate WhisperService
-    whisper_service = WhisperService(model_pool=async_model_pool)
+    whisper_service = WhisperService(
+        model_pool=model_pool,
+        db_manager=db_manager,
+        max_concurrent_tasks=Settings.WhisperServiceSettings.MAX_CONCURRENT_TASKS,
+        task_status_check_interval=Settings.WhisperServiceSettings.TASK_STATUS_CHECK_INTERVAL,
+    )
 
     # 启动任务处理器 | Start the task processor
     whisper_service.start_task_processor()

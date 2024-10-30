@@ -29,15 +29,21 @@
 #              `--'   `--'
 # ==============================================================================
 
+import torch
+import gc
 import asyncio
 import threading
 import traceback
+
 from asyncio import Queue
 from typing import Optional
 from app.utils.logging_utils import configure_logging
+
+# OpenAI Whisper 模型 | OpenAI Whisper model
 import whisper
-import torch
-import gc
+
+# Faster-Whisper 模型 | Faster-Whisper model
+from faster_whisper import WhisperModel
 
 
 # 异步模型池 | Async model pool
@@ -52,20 +58,49 @@ class AsyncModelPool:
                     cls._instance = super(AsyncModelPool, cls).__new__(cls)
         return cls._instance
 
-    def __init__(self, model_name: str, device: str = None,
-                 download_root: Optional[str] = None, in_memory: bool = False,
+    def __init__(self,
+                 # 引擎名称 | Engine name
+                 engine: str,
+
+                 # openai_whisper 引擎设置 | openai_whisper Engine Settings
+                 openai_whisper_model_name: str,
+                 openai_whisper_device: str,
+                 openai_whisper_download_root: Optional[str],
+                 openai_whisper_in_memory: bool,
+
+                 # faster_whisper 引擎设置 | faster_whisper Engine Settings
+                 faster_whisper_model_size_or_path: str,
+                 faster_whisper_device: str,
+                 faster_whisper_device_index: int,
+                 faster_whisper_compute_type: str,
+                 faster_whisper_cpu_threads: int,
+                 faster_whisper_num_workers: int,
+                 faster_whisper_download_root: Optional[str],
+
+                 # 模型池设置 | Model Pool Settings
                  min_size: int = 1, max_size: int = 3,
-                 create_with_max_concurrent_tasks: bool = True
+                 create_with_max_concurrent_tasks: bool = True,
                  ):
         """
         初始化异步模型池
 
         Initialize the asynchronous model pool.
 
-        :param model_name: 模型名称，如 "base", "small", "medium", "large" | Model name, e.g., "base", "small", "medium", "large"
-        :param device: 设备名称，如 "cpu" 或 "cuda"，为 None 时自动选择 | Device name, e.g., "cpu" or "cuda"
-        :param download_root: 模型下载根目录 | Model download root directory
-        :param in_memory: 是否在内存中加载模型 | Whether to load the model in memory
+        :param engine: 引擎名称，目前支持 "openai_whisper", "faster_whisper" | Engine name, currently supports "openai_whisper", "faster_whisper"
+
+        :param openai_whisper_model_name: 模型名称，如 "base", "small", "medium", "large" | Model name, e.g., "base", "small", "medium", "large"
+        :param openai_whisper_device: 设备名称，如 "cpu" 或 "cuda"，为 None 时自动选择 | Device name, e.g., "cpu" or "cuda"
+        :param openai_whisper_download_root: 模型下载根目录 | Model download root directory
+        :param openai_whisper_in_memory: 是否在内存中加载模型 | Whether to load the model in memory
+
+        :param faster_whisper_model_size_or_path: 模型名称或路径 | Model name or path
+        :param faster_whisper_device: 设备名称，如 "cpu" 或 "cuda"，为 None 时自动选择 | Device name, e.g., "cpu" or "cuda"
+        :param faster_whisper_device_index: 设备ID，当 faster_whisper_device 为 "cuda" 时有效 | Device ID, valid when faster_whisper_device is "cuda"
+        :param faster_whisper_compute_type: 模型推理计算类型 | Model inference calculation type
+        :param faster_whisper_cpu_threads: 模型使用的CPU线程数，设置为 0 时使用所有可用的CPU线程 | The number of CPU threads used by the model, set to 0 to use all available CPU threads
+        :param faster_whisper_num_workers: 模型worker数 | Model worker count
+        :param faster_whisper_download_root: 模型下载根目录 | Model download root directory
+
         :param create_with_max_concurrent_tasks: 是否在模型池初始化时以最大并发任务数创建模型实例 |
                                                 Whether to create model instances with the maximum number of concurrent tasks
                                                 when the model pool is initialized
@@ -81,10 +116,25 @@ class AsyncModelPool:
             raise ValueError("min_size cannot be greater than max_size.")
 
         self.logger = configure_logging(name=__name__)
-        self.model_name = model_name
-        self.device = self.select_device(device)
-        self.download_root = download_root
-        self.in_memory = in_memory
+
+        # 模型引擎 | Model engine
+        self.engine = engine
+
+        # openai_whisper 引擎设置 | openai_whisper Engine Settings
+        self.openai_whisper_model_name = openai_whisper_model_name
+        self.openai_whisper_device = self.select_device(openai_whisper_device)
+        self.openai_whisper_download_root = openai_whisper_download_root
+        self.openai_whisper_in_memory = openai_whisper_in_memory
+
+        # faster_whisper 引擎设置 | faster_whisper Engine Settings
+        self.fast_whisper_model_size_or_path = faster_whisper_model_size_or_path
+        self.fast_whisper_device = self.select_device(faster_whisper_device)
+        self.faster_whisper_device_index = faster_whisper_device_index
+        self.fast_whisper_compute_type = faster_whisper_compute_type
+        self.fast_whisper_cpu_threads = faster_whisper_cpu_threads
+        self.fast_whisper_num_workers = faster_whisper_num_workers
+        self.fast_whisper_download_root = faster_whisper_download_root
+
         self.min_size = min_size
         self.max_size = max_size
         self.create_with_max_concurrent_tasks = create_with_max_concurrent_tasks
@@ -143,6 +193,35 @@ class AsyncModelPool:
             self.logger.error(f"Failed to initialize AsyncModelPool: {e}")
             self.logger.debug(traceback.format_exc())
 
+    async def _get_model_instance_info(self) -> dict:
+        """
+        获取模型实例信息。
+
+        Get model instance information.
+
+        :return: 模型实例信息 | Model instance information
+        :raises ValueError: 如果指定的引擎不等于 "openai_whisper" 或 "faster_whisper" | If the specified engine is not "openai_whisper" or "faster_whisper"
+        """
+        if self.engine == "openai_whisper":
+            return {
+                "model_name": self.openai_whisper_model_name,
+                "device": self.openai_whisper_device,
+                "download_root": self.openai_whisper_download_root,
+                "in_memory": self.openai_whisper_in_memory
+            }
+        elif self.engine == "faster_whisper":
+            return {
+                "model_name": self.fast_whisper_model_size_or_path,
+                "device": self.fast_whisper_device,
+                "device_index": self.faster_whisper_device_index,
+                "compute_type": self.fast_whisper_compute_type,
+                "cpu_threads": self.fast_whisper_cpu_threads,
+                "num_workers": self.fast_whisper_num_workers,
+                "download_root": self.fast_whisper_download_root
+            }
+        else:
+            raise ValueError("Invalid engine specified. Choose 'openai_whisper' or 'faster_whisper'.")
+
     async def _create_and_put_model(self) -> None:
         """
         异步创建新的模型实例并放入池中。
@@ -150,20 +229,31 @@ class AsyncModelPool:
         Asynchronously create a new model instance and put it into the pool.
         """
         try:
+            instance_info = await self._get_model_instance_info()
             self.logger.info(f"""
             Attempting to create a new model instance:
-            Model name       : {self.model_name}
-            Device           : {self.device}
+            Engine           : {self.engine}
+            Model name       : {instance_info.get("model_name")}
+            Device           : {instance_info.get("device")}
             Current pool size: {self.current_size}
             """)
 
             # 创建模型实例 | Create model instance
             model = await asyncio.to_thread(
                 whisper.load_model,
-                self.model_name,
-                device=self.device,
-                download_root=self.download_root,
-                in_memory=self.in_memory
+                self.openai_whisper_model_name,
+                device=self.openai_whisper_device,
+                download_root=self.openai_whisper_download_root,
+                in_memory=self.openai_whisper_in_memory
+            ) if self.engine == "openai_whisper" else await asyncio.to_thread(
+                WhisperModel,
+                self.fast_whisper_model_size_or_path,
+                device=self.fast_whisper_device,
+                device_index=self.faster_whisper_device_index,
+                compute_type=self.fast_whisper_compute_type,
+                cpu_threads=self.fast_whisper_cpu_threads,
+                num_workers=self.fast_whisper_num_workers,
+                download_root=self.fast_whisper_download_root
             )
 
             # 将模型放入池中 | Put model into the pool
@@ -173,10 +263,12 @@ class AsyncModelPool:
             async with self.size_lock:
                 self.current_size += 1
 
+            instance_info = await self._get_model_instance_info()
             self.logger.info(f"""
             Successfully created and added a new model instance to the pool.
-            Model name       : {self.model_name}
-            Device           : {self.device}
+            Engine           : {self.engine}
+            Model name       : {instance_info.get("model_name")}
+            Device           : {instance_info.get("device")}
             Current pool size: {self.current_size}
             """)
 
@@ -288,7 +380,8 @@ class AsyncModelPool:
         :return: True 如果模型健康，否则 False True if the model is healthy, False otherwise
         """
         try:
-            dummy_input = torch.zeros(1, 80, 300).to(self.device)
+            instance_info = await self._get_model_instance_info()
+            dummy_input = torch.zeros(1, 80, 300).to(instance_info.get("device"))
             with torch.no_grad():
                 await asyncio.to_thread(model.encode, dummy_input)
             return True
@@ -309,7 +402,8 @@ class AsyncModelPool:
             del model
 
             # 如果使用 GPU 则清理 CUDA 缓存 | Clear CUDA cache if using GPU
-            if self.device == "cuda":
+            instance_info = await self._get_model_instance_info()
+            if instance_info.get("device").startswith("cuda"):
                 torch.cuda.empty_cache()
                 self.logger.info("CUDA cache cleared after model destruction.")
 

@@ -61,6 +61,8 @@ class Task(Base):
 
     # 任务ID | Task ID
     id = Column(Integer, primary_key=True)
+    # 引擎名称 | Engine name
+    engine_name = Column(String, nullable=False)
     # 创建日期 | Creation date
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     # 更新时间 | Update date

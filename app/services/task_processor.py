@@ -47,8 +47,6 @@ from app.utils.file_utils import FileUtils
 from app.utils.logging_utils import configure_logging
 from config.settings import Settings
 
-# 任务并发数 | Task concurrency
-max_concurrent_tasks: int = Settings.WhisperSettings.MAX_CONCURRENT_TASKS
 
 # 初始化静态线程池，所有实例共享 | Initialize static thread pool, shared by all instances
 _executor: ThreadPoolExecutor = ThreadPoolExecutor()
@@ -64,15 +62,20 @@ class TaskProcessor:
     def __init__(self,
                  model_pool: AsyncModelPool,
                  file_utils: FileUtils,
-                 db_manager: DatabaseManager) -> None:
+                 db_manager: DatabaseManager,
+                 max_concurrent_tasks: int,
+                 task_status_check_interval: int
+                 ) -> None:
         """
         初始化 TaskProcessor 实例，设置模型、文件工具和数据库管理器。
 
         Initializes the TaskProcessor instance with the model pool, file utilities, and database manager.
 
-        :param model_pool: AsyncModelPool 实例，用于模型管理 | AsyncModelPool instance for model management
-        :param file_utils: FileUtils 实例，用于文件操作 | FileUtils instance for file operations
-        :param db_manager: DatabaseManager 实例，用于数据库交互 | DatabaseManager instance for database interactions
+        :param model_pool: AsyncModelPool 实例对象，用于模型管理 | AsyncModelPool instance for model management
+        :param file_utils: FileUtils 实例对象，用于文件操作 | FileUtils instance for file operations
+        :param db_manager: DatabaseManager 实例对象，用于数据库交互 | DatabaseManager instance for database interactions
+        :param max_concurrent_tasks: 任务并发数 | Task concurrency
+        :param task_status_check_interval: 任务状态检查间隔（秒） | Task status check interval (seconds)
         :return: None
         """
         self.model_pool: AsyncModelPool = model_pool
@@ -82,7 +85,8 @@ class TaskProcessor:
         self.logger = configure_logging(name=__name__)
         self.shutdown_event: threading.Event = threading.Event()
         self.db_manager: DatabaseManager = db_manager
-        self.task_status_check_interval: int = Settings.WhisperSettings.TASK_STATUS_CHECK_INTERVAL
+        self.max_concurrent_tasks: int = max_concurrent_tasks
+        self.task_status_check_interval: int = task_status_check_interval
 
     def start(self) -> None:
         """
@@ -147,46 +151,44 @@ class TaskProcessor:
 
         while not self.shutdown_event.is_set():
             try:
-                async with self.db_manager.get_session() as session:
-                    tasks: List[Task] = await self._fetch_multiple_tasks(session, limit=max_concurrent_tasks)
+                tasks: List[Task] = await self._fetch_multiple_tasks()
 
-                    if tasks:
-                        await self._process_multiple_tasks(tasks)
-                    else:
-                        current_time = time.time()
-                        if current_time - last_log_time >= log_delay:
-                            self.logger.info(f"No tasks to process, waiting for new tasks...")
-                            last_log_time = current_time
-                        await asyncio.sleep(self.task_status_check_interval)
+                if tasks:
+                    await self._process_multiple_tasks(tasks)
+                else:
+                    current_time = time.time()
+                    if current_time - last_log_time >= log_delay:
+                        self.logger.info(f"No tasks to process, waiting for new tasks...")
+                        last_log_time = current_time
+                    await asyncio.sleep(self.task_status_check_interval)
             except Exception as e:
                 self.logger.error(f"Error while pulling tasks from the database: {str(e)}")
                 self.logger.error(traceback.format_exc())
                 await asyncio.sleep(self.task_status_check_interval)
 
-    async def _fetch_multiple_tasks(self, session: AsyncSession, limit: int = 1) -> List[Task]:
+    async def _fetch_multiple_tasks(self) -> List[Task]:
         """
         从数据库中按优先级获取指定数量的排队任务。
 
         Fetches a specified number of queued tasks from the database based on priority.
 
-        :param session: 当前的数据库会话，用于执行查询 | The current database session for executing the query
-        :param limit: 要获取的任务数限制 | The limit on the number of tasks to fetch
         :return: 按优先级排序的任务列表 | List of tasks sorted by priority
         """
-        result = await session.execute(
-            select(Task)
-            .where(Task.status == TaskStatus.QUEUED)
-            .order_by(
-                case(
-                    (Task.priority == TaskPriority.HIGH, 1),
-                    (Task.priority == TaskPriority.NORMAL, 2),
-                    (Task.priority == TaskPriority.LOW, 3),
+        async with self.db_manager.get_session() as session:
+            result = await session.execute(
+                select(Task)
+                .where(Task.status == TaskStatus.QUEUED)
+                .order_by(
+                    case(
+                        (Task.priority == TaskPriority.HIGH, 1),
+                        (Task.priority == TaskPriority.NORMAL, 2),
+                        (Task.priority == TaskPriority.LOW, 3),
+                    )
                 )
+                .limit(self.max_concurrent_tasks)
             )
-            .limit(limit)
-        )
-        remaining_tasks = result.scalars().all()
-        return remaining_tasks
+            remaining_tasks = result.scalars().all()
+            return remaining_tasks
 
     async def _process_multiple_tasks(self, tasks: List[Task]) -> None:
         """
@@ -213,6 +215,7 @@ class TaskProcessor:
                     f"""
                     Error processing task:
                     ID          : {task.id}
+                    Engine      : {task.engine_name}
                     Priority    : {task.priority}
                     File        : {task.file_name}
                     Size        : {task.file_size_bytes} bytes
@@ -240,6 +243,7 @@ class TaskProcessor:
                 f"""
                 Processing queued task:
                 ID          : {task.id}
+                Engine      : {task.engine_name}
                 Priority    : {task.priority}
                 File        : {task.file_name}
                 Size        : {task.file_size_bytes} bytes
@@ -256,13 +260,24 @@ class TaskProcessor:
                 # 记录任务开始时间 | Record task start time
                 task_start_time: datetime.datetime = datetime.datetime.utcnow()
 
+                # TODO: 根据FastAPI路由中的engine_name字段，执行转录任务 -2024年10月29日18:35:08
+                task_engine_name = task.engine_name
                 # 执行转录任务 | Perform transcription task
-                result = model.transcribe(task.file_path, **task.decode_options or {})
+                if self.model_pool.engine == "openai_whisper":
+                    result = model.transcribe(task.file_path, **task.decode_options or {})
+                    language = result.get('language')
+                elif self.model_pool.engine == "faster_whisper":
+                    # TODO: 从任务中获取解码选项 | Get decode options from the task -2024年10月29日18:35:08
+                    segments, info = model.transcribe(task.file_path, beam_size=5)
+                    result = {"transcription": "".join([seg.text for seg in segments])}
+                    language = info.language
+                else:
+                    raise ValueError(f"Trying to process task with unsupported engine: {self.model_pool.engine}")
 
                 # 更新任务状态和结果 | Update task status and result
                 task_update = {
                     "status": TaskStatus.COMPLETED,
-                    "language": result.get('language'),
+                    "language": language,
                     "result": result,
                     "total_time": (datetime.datetime.utcnow() - task_start_time).total_seconds()
                 }
@@ -282,6 +297,7 @@ class TaskProcessor:
                 f"""
                 Error processing tasks: 
                 ID          : {task.id}
+                Engine      : {task.engine_name}
                 Priority    : {task.priority}
                 File        : {task.file_name}
                 Size        : {task.file_size_bytes} bytes
