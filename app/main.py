@@ -101,6 +101,9 @@ async def lifespan(application: FastAPI):
     # 启动任务处理器 | Start the task processor
     whisper_service.start_task_processor()
 
+    # 将数据库管理器存储在应用的 state 中 | Store db_manager in the app state
+    application.state.db_manager = db_manager
+
     # 将 whisper_service 存储在应用的 state 中 | Store whisper_service in the app state
     application.state.whisper_service = whisper_service
 

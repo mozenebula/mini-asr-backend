@@ -61,6 +61,12 @@ class Task(Base):
 
     # 任务ID | Task ID
     id = Column(Integer, primary_key=True)
+    # 任务优先级 | Task priority
+    priority = Column(Enum(TaskPriority), default=TaskPriority.NORMAL)
+    # 任务状态，初始为 QUEUED | Task status, initially QUEUED
+    status = Column(Enum(TaskStatus), default=TaskStatus.QUEUED)
+    # 检测到的语言 | Detected language
+    language = Column(String, nullable=True)
     # 引擎名称 | Engine name
     engine_name = Column(String, nullable=True)
     # 创建日期 | Creation date
@@ -81,11 +87,7 @@ class Task(Base):
 
     # 解码选项 | Decode options
     decode_options = Column(JSON)
-    # 任务优先级 | Task priority
-    priority = Column(Enum(TaskPriority), default=TaskPriority.NORMAL)
 
-    # 任务状态，初始为 QUEUED | Task status, initially QUEUED
-    status = Column(Enum(TaskStatus), default=TaskStatus.QUEUED)
     # 结果 | Result
     result = Column(JSON, nullable=True)
     # 错误信息 | Error message
@@ -93,13 +95,12 @@ class Task(Base):
     # 输出结果链接 | Output URL
     output_url = Column(String, nullable=True)
 
-    # 检测到的语言 | Detected language
-    language = Column(String, nullable=True)
-
     # 转换为字典 | Convert to dictionary
     def to_dict(self):
         return {
             'id': self.id,
+            'status': self.status.value,
+            'priority': self.priority,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'task_processing_time': self.task_processing_time,
@@ -107,12 +108,9 @@ class Task(Base):
             'file_name': self.file_name,
             'file_size_bytes': self.file_size_bytes,
             'file_duration': self.file_duration,
+            'language': self.language,
             'decode_options': self.decode_options,
-            'priority': self.priority,
-            'status': self.status.value,
-            'result': self.result,
             'error_message': self.error_message,
             'output_url': self.output_url,
-            'language': self.language
+            'result': self.result
         }
-

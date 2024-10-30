@@ -34,6 +34,7 @@ import gc
 import asyncio
 import threading
 import traceback
+import datetime
 
 from asyncio import Queue
 from typing import Optional
@@ -230,6 +231,10 @@ class AsyncModelPool:
         Asynchronously create a new model instance and put it into the pool.
         """
         try:
+            # 开始时间 | Start time
+            start_time = datetime.datetime.now()
+
+            # 获取模型实例信息 | Get model instance information
             instance_info = await self._get_model_instance_info()
             self.logger.info(f"""
             Attempting to create a new model instance:
@@ -263,6 +268,9 @@ class AsyncModelPool:
             else:
                 raise ValueError("Invalid engine specified. Choose 'openai_whisper' or 'faster_whisper'.")
 
+            # 结束时间 | End time
+            end_time = datetime.datetime.now()
+
             # 将模型放入池中 | Put model into the pool
             await self.pool.put(model)
 
@@ -277,6 +285,7 @@ class AsyncModelPool:
             Model name       : {instance_info.get("model_name")}
             Device           : {instance_info.get("device")}
             Current pool size: {self.current_size}
+            Time taken       : {end_time - start_time} seconds
             """)
 
         except Exception as e:

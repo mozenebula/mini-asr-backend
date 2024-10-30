@@ -260,16 +260,17 @@ class TaskProcessor:
                 # 记录任务开始时间 | Record task start time
                 task_start_time: datetime.datetime = datetime.datetime.utcnow()
 
-                # TODO: 根据FastAPI路由中的engine_name字段，执行转录任务 -2024年10月29日18:35:08
-                task_engine_name = task.engine_name
                 # 执行转录任务 | Perform transcription task
                 if self.model_pool.engine == "openai_whisper":
                     result = model.transcribe(task.file_path, **task.decode_options or {})
                     language = result.get('language')
                 elif self.model_pool.engine == "faster_whisper":
-                    # TODO: 从任务中获取解码选项 | Get decode options from the task -2024年10月29日18:35:08
                     segments, info = model.transcribe(task.file_path, **task.decode_options or {})
-                    result = {"transcription": "".join([seg.text for seg in segments])}
+                    result = {
+                        "transcription": " ".join([seg.text for seg in segments]),
+                        "segments": [segment._asdict() for segment in segments],
+                        "info": info._asdict()
+                    }
                     language = info.language
                 else:
                     raise ValueError(f"Trying to process task with unsupported engine: {self.model_pool.engine}")

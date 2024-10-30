@@ -45,10 +45,8 @@ router = APIRouter()
 # 配置日志记录器
 logger = configure_logging(name=__name__)
 
-# 初始化数据库管理器
-db_manager = DatabaseManager()
 
-
+# 在后台创建一个转录任务 | Create a transcription task in the background
 @router.post(
     "/task/create",
     response_model=ResponseModel,
@@ -59,6 +57,7 @@ async def create_transcription_task(
         file: UploadFile = File(...,
                                 description="媒体文件（支持的格式：音频和视频，如 MP3, WAV, MP4, MKV 等） / Media file (supported formats: audio and video, e.g., MP3, WAV, MP4, MKV)"),
         priority: TaskPriority = Form(TaskPriority.NORMAL, description="任务优先级 / Task priority"),
+        language: str = Form("", description="指定输出语言，例如 'en' 或 'zh'，留空则自动检测 / Specify the output language, e.g., 'en' or 'zh', leave empty for auto-detection"),
         temperature: Union[float, List[float]] = Form(0.2,
                                                       description="采样温度 / Sampling temperature (can be a single value or a list of values)"),
         compression_ratio_threshold: float = Form(2.4, description="压缩比阈值 / Compression ratio threshold"),
@@ -79,6 +78,7 @@ async def create_transcription_task(
 ):
     try:
         decode_options = {
+            "language": language if language else None,
             "temperature": temperature,
             "compression_ratio_threshold": compression_ratio_threshold,
             "no_speech_threshold": no_speech_threshold,
@@ -101,19 +101,20 @@ async def create_transcription_task(
                              params=dict(request.query_params),
                              data=task_info.to_dict())
     except Exception as e:
-        logger.error(f"Unknown error occurred during transcription: {str(e)}")
+        logger.error(f"Unexpected error: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        detail = ErrorResponseModel(code=500,
-                                    router=str(request.url),
-                                    params=dict(request.query_params),
-                                    message=f"Failed to create transcription task. An unknown error occurred: {str(e)}",
-                                    ).dict()
         raise HTTPException(
-            status_code=500,
-            detail=detail
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ErrorResponseModel(
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unexpected error occurred while creating the transcription task.",
+                router=str(request.url),
+                params=dict(request.query_params),
+            ).dict()
         )
 
 
+# 获取任务状态 | Get task status
 @router.get("/tasks/check",
             summary="获取任务状态 / Get task status",
             response_model=ResponseModel)
@@ -122,7 +123,7 @@ async def get_task_status(
         task_id: int = Query(description="任务ID / Task ID")
 ):
     try:
-        async with db_manager.get_session() as session:
+        async with request.app.state.db_manager.get_session() as session:
             task_info = await session.get(Task, task_id)
             if not task_info:
                 raise HTTPException(status_code=404, detail="Task not found in the database.")
@@ -131,16 +132,16 @@ async def get_task_status(
                                  params=dict(request.query_params),
                                  data=task_info.to_dict())
     except Exception as e:
-        logger.error(f"Unknown error occurred during task status check: {str(e)}")
+        logger.error(f"Unexpected error: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        detail = ErrorResponseModel(code=500,
-                                    router=str(request.url),
-                                    params=dict(request.query_params),
-                                    message=f"Failed to retrieve task status. An unknown error occurred: {str(e)}",
-                                    ).dict()
         raise HTTPException(
-            status_code=500,
-            detail=detail
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ErrorResponseModel(
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unexpected error occurred while retrieving the task status.",
+                router=str(request.url),
+                params=dict(request.query_params),
+            ).dict()
         )
 
 
@@ -152,7 +153,7 @@ async def get_task_result(
     task_id: int = Query(description="任务ID / Task ID")
 ):
     try:
-        async with db_manager.get_session() as session:
+        async with request.app.state.db_manager.get_session() as session:
             task = await session.get(Task, task_id)
             if not task:
                 raise HTTPException(
@@ -165,7 +166,7 @@ async def get_task_result(
                     ).dict()
                 )
             if task.status != TaskStatus.COMPLETED:
-                raise HTTPException(
+                return HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=ErrorResponseModel(
                         code=status.HTTP_400_BAD_REQUEST,
@@ -192,10 +193,6 @@ async def get_task_result(
                 params=dict(request.query_params),
             ).dict()
         )
-
-    except HTTPException as http_exc:
-        # Directly re-raise HTTPExceptions
-        raise http_exc
 
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
@@ -245,10 +242,15 @@ async def extract_audio(
         )
         logger.info(f"Audio extracted successfully from video file: {file.filename}")
         return response
-    except HTTPException as e:
-        logger.error(f"HTTPException during audio extraction: {str(e.detail)}")
-        raise e
     except Exception as e:
-        logger.error(f"Unknown error occurred during audio extraction: {str(e)}")
+        logger.error(f"Unexpected error: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Failed to extract audio: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ErrorResponseModel(
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unexpected error occurred while extracting audio from the video file.",
+                router=str(request.url),
+                params=dict(request.query_params),
+            ).dict()
+        )
