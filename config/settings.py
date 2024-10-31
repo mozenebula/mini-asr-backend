@@ -101,7 +101,7 @@ class Settings:
     class AsyncModelPoolSettings:
         # 引擎名称 | Engine name
         # 目前只支持 "openai_whisper" 和 "faster_whisper" | Currently only supports "openai_whisper" and "faster_whisper"
-        engine: str = "openai_whisper"
+        engine: str = "faster_whisper"
 
         # 最小的模型池大小 | Minimum model pool size
         min_size: int = 1
