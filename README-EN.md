@@ -1,5 +1,7 @@
 # Whisper-Speech-to-Text-API 🎙️➡️📜
 
+## This project is still under active development and optimization. The current readme document is outdated. Please wait for the next version update.
+
 [Chinese](README.md) | [English](README-EN.md)
 
 Welcome to the **[Whisper-Speech-to-Text-API](https://github.com/Evil0ctal/Whisper-Speech-to-Text-API)** project! This project provides developers with a fast and reliable API, enabling efficient transcription of various video and audio file formats into text using the [OpenAI Whisper](https://github.com/openai/whisper) model. It’s ideal for speech recognition, subtitle generation, and text analysis needs.
