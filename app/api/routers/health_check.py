@@ -57,7 +57,32 @@ class HealthCheckResponse(BaseModel):
 )
 async def health_check():
     """
-    健康检查端点，用于确认服务是否正常运行。
-    Health check endpoint to confirm that the service is running properly.
+    # [中文]
+
+    ### 用途说明:
+
+    - 检查服务器是否正确响应请求。
+
+    ### 参数说明:
+
+    - 无参数。
+
+    ### 返回结果:
+
+    - `status`: 服务器状态，正常为 `ok`。
+
+    # [English]
+
+    ### Purpose:
+
+    - Check if the server responds to requests correctly.
+
+    ### Parameter Description:
+
+    - No parameters.
+
+    ### Return Result:
+
+    - `status`: Server status, normal is `ok`.
     """
     return HealthCheckResponse()

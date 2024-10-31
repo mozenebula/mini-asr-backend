@@ -30,13 +30,13 @@
 # ==============================================================================
 
 import traceback
-from sqlalchemy import select
+from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
-from typing import Optional, List
+from typing import Optional, List, Dict
 from contextlib import asynccontextmanager
-from app.database.models import Task, Base
+from app.database.models import Task, Base, QueryTasksOptionalFilter
 from app.utils.logging_utils import configure_logging
 
 # 配置日志记录器 | Configure logger
@@ -145,3 +145,72 @@ class DatabaseManager:
                 logger.error(f"Error fetching tasks: {e}")
                 logger.error(traceback.format_exc())
                 return []
+
+    async def query_tasks(self,
+                          session: AsyncSession,
+                          filters: QueryTasksOptionalFilter) -> Optional[Dict[str, List[Dict]]]:
+        """
+        按条件查询任务，使用分页和条件查询
+
+        Query tasks with pagination and conditions.
+        """
+        try:
+            # 构建查询条件 | Build query conditions
+            conditions = self._build_conditions(filters)
+
+            # 构建查询语句 | Build query statement
+            query = (
+                select(Task)
+                .where(and_(*conditions))
+                .order_by(Task.created_at)
+                .offset(filters.offset)
+                .limit(filters.limit)
+            )
+
+            result = await session.execute(query)
+            tasks = result.scalars().all()
+
+            # 获取总记录数 | Get total count
+            count_query = select(func.count()).select_from(Task).where(and_(*conditions))
+            total_count = (await session.execute(count_query)).scalar()
+
+            # 计算是否有更多数据，并返回 next_offset 以供下一页查询 | Calculate if there are more data and return next_offset for next page query
+            has_more = filters.offset + filters.limit < total_count
+            next_offset = filters.offset + filters.limit if has_more else None
+
+            return {
+                "tasks": [task.to_dict() for task in tasks],
+                "total_count": total_count,
+                "has_more": has_more,
+                "next_offset": next_offset
+            }
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error querying tasks: {e}")
+            logger.error(traceback.format_exc())
+            return None
+
+    def _build_conditions(self, filters: QueryTasksOptionalFilter) -> List:
+        """
+        根据 QueryTasksOptionalFilter 对象构建查询条件
+
+        Build query conditions based on QueryTasksOptionalFilter.
+        """
+        conditions = []
+        if filters.status:
+            conditions.append(Task.status == filters.status)
+        if filters.priority:
+            conditions.append(Task.priority == filters.priority)
+        if filters.created_after:
+            conditions.append(Task.created_at >= filters.created_after)
+        if filters.created_before:
+            conditions.append(Task.created_at <= filters.created_before)
+        if filters.language:
+            conditions.append(Task.language == filters.language)
+        if filters.engine_name:
+            conditions.append(Task.engine_name == filters.engine_name)
+        if filters.has_result is not None:
+            conditions.append((Task.result != None) if filters.has_result else (Task.result == None))
+        if filters.has_error is not None:
+            conditions.append((Task.error_message != None) if filters.has_error else (Task.error_message == None))
+        return conditions

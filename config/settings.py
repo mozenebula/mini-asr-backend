@@ -38,9 +38,9 @@ class Settings:
         # 项目名称 | Project name
         title: str = "Whisper Speech to Text API"
         # 项目描述 | Project description
-        description: str = "An open source Speech-to-Text API. The project is based on OpenAI's Whisper model and uses the asynchronous features of FastAPI to efficiently wrap it and support more custom functions."
+        description: str = "An open source speech-to-text API that runs completely locally. The project is based on the OpenAI Whisper model and the faster inference Faster Whisper model, and implements an asynchronous model pool, using the asynchronous features of FastAPI for efficient packaging, supporting thread-safe asynchronous task queues, asynchronous file IO, asynchronous database IO, asynchronous web crawler modules, and more custom features."
         # 项目版本 | Project version
-        version: str = "1.0.1"
+        version: str = "1.0.2"
         # Swagger 文档 URL | Swagger docs URL
         docs_url: str = "/"
         # 是否开启 debug 模式 | Whether to enable debug mode

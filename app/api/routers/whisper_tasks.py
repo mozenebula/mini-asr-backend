@@ -37,7 +37,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.utils.logging_utils import configure_logging
 from app.api.models.APIResponseModel import ResponseModel, ErrorResponseModel
-from app.database.models import Task, TaskStatus, TaskPriority
+from app.database.models import Task, TaskStatus, TaskPriority, QueryTasksOptionalFilter
 
 router = APIRouter()
 
@@ -45,13 +45,13 @@ router = APIRouter()
 logger = configure_logging(name=__name__)
 
 
-# 在后台创建一个转录任务 | Create a transcription task in the background
+# 创建任务 | Create task
 @router.post(
     "/task/create",
     response_model=ResponseModel,
     summary="上传媒体文件并且创建一个Whisper转录任务在后台处理 | Upload a media file and create a Whisper transcription task to be processed in the background"
 )
-async def create_transcription_task(
+async def task_create(
         request: Request,
         file: UploadFile = File(...,
                                 description="媒体文件（支持的格式：音频和视频，如 MP3, WAV, MP4, MKV 等） / Media file (supported formats: audio and video, e.g., MP3, WAV, MP4, MKV)"),
@@ -203,86 +203,178 @@ async def create_transcription_task(
         )
 
 
-# 获取任务状态 | Get task status
-@router.get("/tasks/check",
-            summary="获取任务状态 / Get task status",
-            response_model=ResponseModel)
-async def get_task_status(
+# 查询任务 | Query task
+@router.post("/tasks/query",
+             response_model=ResponseModel,
+             summary="查询任务 | Query task"
+             )
+async def task_query(
         request: Request,
-        task_id: int = Query(description="任务ID / Task ID")
+        params: QueryTasksOptionalFilter
 ):
     """
     # [中文]
 
     ### 用途说明:
-    - 获取指定任务的状态信息。
+    - 根据多种筛选条件查询任务列表，包括任务状态、优先级、创建时间、语言、引擎名称等信息。
+    - 该接口适用于分页查询，并且通过 `limit` 和 `offset` 参数控制每页显示的记录数，支持客户端逐页加载数据。
 
     ### 参数说明:
-    - `task_id` (int): 任务ID。
+    - `status` (TaskStatus): 筛选任务状态：
+        - 例如 'queued'（排队中）或 'processing'（处理中）或 'completed'（已完成） 或 'failed'（失败）。
+    - `priority` (TaskPriority): 筛选任务优先级：
+        - 例如 'low'、'normal'、'high'。
+    - `created_after` (str): 创建时间的起始时间，格式为 'YYYY-MM-DDTHH:MM:SS'，为空时忽略该条件。
+    - `created_before` (str): 创建时间的结束时间，格式为 'YYYY-MM-DDTHH:MM:SS'，为空时忽略该条件。
+    - `language` (str): 任务的语言代码，例如 `zh`或'en'。设置为空字符串 `""` 可以查询所有语言的任务。
+    - `engine_name` (str): 引擎名称，例如 'faster_whisper'或'openai_whisper'。
+    - `has_result` (bool): 指定是否要求任务有结果数据。
+    - `has_error` (bool): 指定是否要求任务有错误信息。
+    - `limit` (int): 每页的记录数量，默认值为20，用户可根据需求自定义每页数量。
+    - `offset` (int): 数据分页的起始位置，默认值为0，后续使用响应中的 `next_offset` 值进行下一页查询。
 
     ### 返回:
-    - 返回一个包含任务状态信息的响应，包括任务ID、状态、优先级等信息。
+    - `tasks` (list): 包含满足条件的任务列表，每个任务记录包括任务ID、状态、优先级、创建时间等详细信息。
+    - `total_count` (int): 符合条件的任务总数。
+    - `has_more` (bool): 是否还有更多数据。如果为 `True`，则表示存在下一页数据。
+    - `next_offset` (int): 下次分页请求的偏移量。用户可以通过此值构建下一页查询请求。
+
+    ### 使用示例:
+    - 请求示例：
+        ```json
+        {
+            "status": "completed",
+            "priority": "high",
+            "created_after": "2024-01-01T00:00:00",
+            "created_before": "2024-12-31T23:59:59",
+            "language": "",
+            "engine_name": "faster_whisper",
+            "has_result": true,
+            "has_error": false,
+            "limit": 10,
+            "offset": 0
+        }
+        ```
+    - 响应示例：
+        ```json
+        {
+            "code": 200,
+            "router": "http://localhost/api/tasks/query",
+            "params": { ... },
+            "data": {
+                "tasks": [
+                    {
+                        "id": 123,
+                        "status": "completed",
+                        "priority": "high",
+                        "created_at": "2024-05-15T12:34:56",
+                        "language": "en",
+                        "engine_name": "faster_whisper",
+                        "result": {...},
+                        "error_message": null
+                    },
+                    ...
+                ],
+                "total_count": 55,
+                "has_more": true,
+                "next_offset": 10
+            }
+        }
+        ```
 
     ### 错误代码说明:
-
-    - `404`: 任务未找到，可能是任务ID不存在。
-    - `500`: 未知错误。
+    - `500`: 未知错误，通常为内部错误。
 
     # [English]
 
     ### Purpose:
-    - Get the status information of the specified task.
+    - Query the task list based on multiple filtering conditions, including task status, priority, creation time, language, engine name, etc.
+    - This endpoint is suitable for paginated queries, and the number of records displayed per page is controlled by the `limit` and `offset` parameters, supporting clients to load data page by page.
 
     ### Parameters:
-    - `task_id` (int): Task ID.
+    - `status` (TaskStatus): Filter task status:
+        - e.g., 'queued' (in the queue), 'processing' (processing), 'completed' (completed), or 'failed' (failed).
+    - `priority` (TaskPriority): Filter task priority:
+        - e.g., 'low', 'normal', 'high'.
+    - `created_after` (str): Start time of creation time, format is 'YYYY-MM-DDTHH:MM:SS', ignore this condition when empty.
+    - `created_before` (str): End time of creation time, format is 'YYYY-MM-DDTHH:MM:SS', ignore this condition when empty.
+    - `language` (str): Language code of the task, e.g., `zh` or `en`. Set to an empty string `""` to query tasks in all languages.
+    - `engine_name` (str): Engine name, e.g., 'faster_whisper' or 'openai_whisper'.
+    - `has_result` (bool): Specify whether the task requires result data.
+    - `has_error` (bool): Specify whether the task requires error information.
+    - `limit` (int): Number of records per page, default is 20, users can customize the number of records per page according to their needs.
+    - `offset` (int): Starting position of data pagination, default is 0, use the `next_offset` value in the response for the next page query.
 
     ### Returns:
-    - Returns a response containing task status information, including task ID, status, priority, etc.
+    - `tasks` (list): List of tasks that meet the conditions, each task record includes detailed information such as task ID, status, priority, creation time, etc.
+    - `total_count` (int): Total number of tasks that meet the conditions.
+    - `has_more` (bool): Whether there is more data. If `True`, it means there is more data on the next page.
+    - `next_offset` (int): Offset value for the next page request. Users can use this value to construct the next page query request.
+
+    ### Example:
+    - Request example:
+        ```json
+        {
+            "status": "completed",
+            "priority": "high",
+            "created_after": "2024-01-01T00:00:00",
+            "created_before": "2024-12-31T23:59:59",
+            "language": "",
+            "engine_name": "faster_whisper",
+            "has_result": true,
+            "has_error": false,
+            "limit": 10,
+            "offset": 0
+        }
+        ```
+    - Response example:
+        ```json
+        {
+            "code": 200,
+            "router": "http://localhost/api/tasks/query",
+            "params": { ... },
+            "data": {
+                "tasks": [
+                    {
+                        "id": 123,
+                        "status": "completed",
+                        "priority": "high",
+                        "created_at": "2024-05-15T12:34:56",
+                        "language": "en",
+                        "engine_name": "faster_whisper",
+                        "result": {...},
+                        "error_message": null
+                    },
+                    ...
+                ],
+                "total_count": 55,
+                "has_more": true,
+                "next_offset": 10
+            }
+        }
+        ```
 
     ### Error Code Description:
-
-    - `404`: Task not found, possibly because the task ID does not exist.
-    - `500`: Unknown error.
+    - `500`: Unknown error, usually an internal error.
     """
-    try:
-        async with request.app.state.db_manager.get_session() as session:
-            task_info = await session.get(Task, task_id)
-            if not task_info:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=ErrorResponseModel(
-                        code=status.HTTP_404_NOT_FOUND,
-                        message="Task not found.",
-                        router=str(request.url),
-                        params=dict(request.query_params),
-                    ).dict()
-                )
-            return ResponseModel(code=200,
-                                 router=str(request.url),
-                                 params=dict(request.query_params),
-                                 data=task_info.to_dict())
 
-    except HTTPException as http_error:
-        raise http_error
+    async with request.app.state.db_manager.get_session() as session:
+        result = await request.app.state.db_manager.query_tasks(session, params)
+        if result is None:
+            raise HTTPException(status_code=500, detail="An error occurred while querying tasks.")
 
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=ErrorResponseModel(
-                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                message=f"An unexpected error occurred while retrieving the task status: {str(e)}",
-                router=str(request.url),
-                params=dict(request.query_params),
-            ).dict()
-        )
+    return ResponseModel(
+        code=200,
+        router=str(request.url),
+        params=params.dict(),
+        data=result
+    )
 
 
 @router.get("/tasks/result",
             summary="获取任务结果 / Get task result",
             response_model=ResponseModel)
-async def get_task_result(
+async def task_result(
         request: Request,
         task_id: int = Query(description="任务ID / Task ID")
 ):

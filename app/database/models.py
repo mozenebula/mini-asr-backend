@@ -30,7 +30,10 @@
 # ==============================================================================
 
 import enum
-import datetime
+import datetime as dt
+from typing import Optional
+
+from pydantic import BaseModel, constr, Field, ConfigDict, field_validator
 from sqlalchemy import Column, Integer, String, Enum, Text, JSON, Float, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -72,9 +75,9 @@ class Task(Base):
     # 引擎名称 | Engine name
     engine_name = Column(String, nullable=True)
     # 创建日期 | Creation date
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
     # 更新时间 | Update date
-    updated_at = Column(DateTime, onupdate=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, onupdate=dt.datetime.utcnow)
     # 处理任务花费的总时间 | Total time spent processing the task
     task_processing_time = Column(Float, nullable=True)
 
@@ -118,3 +121,24 @@ class Task(Base):
             'output_url': self.output_url,
             'result': self.result
         }
+
+
+# 查询任务的可选过滤器 | Query tasks optional filter
+class QueryTasksOptionalFilter(BaseModel):
+    status: Optional[TaskStatus] = Field(TaskStatus.COMPLETED, description="任务状态，例如 'queued' 或 'completed'")
+    priority: Optional[TaskPriority] = Field(TaskPriority.NORMAL, description="任务优先级，例如 'low', 'normal', 'high'")
+    created_after: Optional[str] = Field('', description="创建时间的起始时间，格式为 'YYYY-MM-DDTHH:MM:SS'")
+    created_before: Optional[str] = Field('', description="创建时间的结束时间，格式为 'YYYY-MM-DDTHH:MM:SS'")
+    language: Optional[constr(strip_whitespace=True, min_length=0, max_length=5)] = Field("", description="检测到的语言代码，空字符串表示不限制语言")
+    engine_name: Optional[constr(strip_whitespace=True, max_length=50)] = Field("faster_whisper", description="引擎名称，例如 'faster_whisper'")
+    has_result: Optional[bool] = Field(True, description="是否要求任务有结果")
+    has_error: Optional[bool] = Field(False, description="是否要求任务存在错误信息")
+    limit: int = Field(20, description="每页记录数，默认值为20")
+    offset: int = Field(0, description="分页的起始位置，默认值为0")
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    # 自动将空字符串转换为 None | Automatically convert empty strings to None
+    @field_validator("created_after", "created_before", "language", mode="before")
+    def empty_str_to_none(cls, v):
+        return None if v == "" else v

@@ -201,7 +201,7 @@ class WhisperService:
             await session.commit()
             task_id = task.id
             # 设置任务输出链接 | Set task output URL
-            task.output_url = f"{request.url_for('get_task_result')}?task_id={task_id}"
+            task.output_url = f"{request.url_for('task_result')}?task_id={task_id}"
             await session.commit()
 
         self.logger.info(f"Created transcription task with ID: {task_id}")

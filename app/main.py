@@ -41,6 +41,18 @@ from config.settings import Settings
 # 配置日志记录器 | Configure the logger
 logger = configure_logging(name=__name__)
 
+# API Tags
+tags_metadata = [
+    {
+        "name": "Health-Check",
+        "description": "**(服务器健康检查/Server Health Check)**",
+    },
+    {
+        "name": "Whisper-Tasks",
+        "description": "**(Whisper 任务/Whisper Tasks)**",
+    },
+]
+
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
@@ -119,22 +131,11 @@ app = FastAPI(
     title=Settings.FastAPISettings.title,
     description=Settings.FastAPISettings.description,
     version=Settings.FastAPISettings.version,
+    openapi_tags=tags_metadata,
     docs_url=Settings.FastAPISettings.docs_url,
     debug=Settings.FastAPISettings.debug,
     lifespan=lifespan
 )
-
-# API Tags
-tags_metadata = [
-    {
-        "name": "Health-Check",
-        "description": "**(服务器健康检查/Server Health Check)**",
-    },
-    {
-        "name": "Whisper-Transcribe",
-        "description": "**(Whisper语音转文本/Whisper Speech to Text)**",
-    },
-]
 
 # API 路由 | API Router
 app.include_router(api_router, prefix="/api")
