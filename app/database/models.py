@@ -61,6 +61,8 @@ class Task(Base):
 
     # 任务ID | Task ID
     id = Column(Integer, primary_key=True)
+    # 任务类型 | Task type
+    task_type = Column(String, nullable=False)
     # 任务优先级 | Task priority
     priority = Column(Enum(TaskPriority), default=TaskPriority.NORMAL)
     # 任务状态，初始为 QUEUED | Task status, initially QUEUED
@@ -101,6 +103,8 @@ class Task(Base):
             'id': self.id,
             'status': self.status.value,
             'priority': self.priority,
+            'engine_name': self.engine_name,
+            'task_type': self.task_type,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'task_processing_time': self.task_processing_time,

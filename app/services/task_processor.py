@@ -47,7 +47,6 @@ from app.utils.file_utils import FileUtils
 from app.utils.logging_utils import configure_logging
 from config.settings import Settings
 
-
 # 初始化静态线程池，所有实例共享 | Initialize static thread pool, shared by all instances
 _executor: ThreadPoolExecutor = ThreadPoolExecutor()
 
@@ -244,6 +243,7 @@ class TaskProcessor:
                 Processing queued task:
                 ID          : {task.id}
                 Engine      : {task.engine_name}
+                Type        : {task.task_type}
                 Priority    : {task.priority}
                 File        : {task.file_name}
                 Size        : {task.file_size_bytes} bytes
@@ -262,10 +262,11 @@ class TaskProcessor:
 
                 # 执行转录任务 | Perform transcription task
                 if self.model_pool.engine == "openai_whisper":
-                    result = model.transcribe(task.file_path, **task.decode_options or {})
+                    result = model.transcribe(task.file_path, **task.decode_options or {}, task=task.task_type)
                     language = result.get('language')
+                    result['text'] = " ".join([seg['text'] for seg in result['segments']])
                 elif self.model_pool.engine == "faster_whisper":
-                    segments, info = model.transcribe(task.file_path, **task.decode_options or {})
+                    segments, info = model.transcribe(task.file_path, **task.decode_options or {}, task=task.task_type)
                     result = {
                         "transcription": " ".join([seg.text for seg in segments]),
                         "segments": [segment._asdict() for segment in segments],
@@ -285,6 +286,7 @@ class TaskProcessor:
                     ID          : {task.id}
                     Engine      : {task.engine_name}
                     Priority    : {task.priority}
+                    Type        : {task.task_type}
                     File        : {task.file_name}
                     Size        : {task.file_size_bytes} bytes
                     Duration    : {task.file_duration:.2f} seconds
@@ -320,6 +322,7 @@ class TaskProcessor:
                 ID          : {task.id}
                 Engine      : {task.engine_name}
                 Priority    : {task.priority}
+                Type        : {task.task_type}
                 File        : {task.file_name}
                 Size        : {task.file_size_bytes} bytes
                 Duration    : {task.file_duration:.2f} seconds

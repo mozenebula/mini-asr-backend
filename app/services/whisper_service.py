@@ -177,6 +177,7 @@ class WhisperService:
             self,
             file: UploadFile,
             decode_options: dict,
+            task_type: str,
             priority: str,
             request: Request
     ) -> Task:
@@ -188,6 +189,7 @@ class WhisperService:
         async with self.db_manager.get_session() as session:
             task = Task(
                 engine_name=self.model_pool.engine,
+                task_type=task_type,
                 file_path=temp_file_path,
                 file_name=file.filename,
                 file_size_bytes=os.path.getsize(temp_file_path),
@@ -205,7 +207,15 @@ class WhisperService:
         self.logger.info(f"Created transcription task with ID: {task_id}")
         return task
 
-    async def get_audio_duration(self, temp_file_path):
+    async def get_audio_duration(self, temp_file_path: str) -> float:
+        """
+        获取音频文件的时长
+
+        Get the duration of an audio file
+
+        :param temp_file_path: 文件路径 | File path
+        :return: 音频文件时长（秒） | Audio file duration (seconds)
+        """
         self.logger.debug(f"Getting duration of audio file: {temp_file_path}")
         audio = await asyncio.get_running_loop().run_in_executor(
             _executor, lambda: AudioSegment.from_file(temp_file_path)

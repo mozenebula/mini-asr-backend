@@ -305,8 +305,9 @@ class AsyncModelPool:
 
         :return: 模型实例 Model instance
 
-        :raises RuntimeError: 当模型池已达到最大大小，且所有实例都正在使用时引发异常。
-                              Raised if the model pool is at maximum size and all instances are in use.
+        :raises RuntimeError: 当模型池已达到最大大小，且所有实例都正在使用时，又尝试从池中获取模型实例时。
+                                When the model pool has reached the maximum size, and all instances are in use,
+                                and an attempt is made to retrieve a model instance from the pool.
         """
         self.logger.info("Attempting to retrieve a model instance from the pool...")
         try:

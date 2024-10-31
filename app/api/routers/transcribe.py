@@ -36,7 +36,6 @@ from fastapi import Request, APIRouter, UploadFile, File, HTTPException, Form, B
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.utils.logging_utils import configure_logging
-from app.database.database import DatabaseManager
 from app.api.models.APIResponseModel import ResponseModel, ErrorResponseModel
 from app.database.models import Task, TaskStatus, TaskPriority
 
@@ -56,8 +55,11 @@ async def create_transcription_task(
         request: Request,
         file: UploadFile = File(...,
                                 description="媒体文件（支持的格式：音频和视频，如 MP3, WAV, MP4, MKV 等） / Media file (supported formats: audio and video, e.g., MP3, WAV, MP4, MKV)"),
+        task_type: str = Form("transcribe",
+                              description="任务类型，默认为 'transcription'，具体取值请参考文档 / Task type, default is 'transcription', refer to the documentation for specific values"),
         priority: TaskPriority = Form(TaskPriority.NORMAL, description="任务优先级 / Task priority"),
-        language: str = Form("", description="指定输出语言，例如 'en' 或 'zh'，留空则自动检测 / Specify the output language, e.g., 'en' or 'zh', leave empty for auto-detection"),
+        language: str = Form("",
+                             description="指定输出语言，例如 'en' 或 'zh'，留空则自动检测 / Specify the output language, e.g., 'en' or 'zh', leave empty for auto-detection"),
         temperature: Union[float, List[float]] = Form(0.2,
                                                       description="采样温度 / Sampling temperature (can be a single value or a list of values)"),
         compression_ratio_threshold: float = Form(2.4, description="压缩比阈值 / Compression ratio threshold"),
@@ -76,6 +78,92 @@ async def create_transcription_task(
         hallucination_silence_threshold: Optional[float] = Form(None,
                                                                 description="幻听静音阈值 / Hallucination silence threshold")
 ):
+    """
+    # [中文]
+
+    ### 用途说明:
+
+    - 上传媒体文件并且创建一个Whisper任务在后台处理。
+    - 任务的处理优先级可以通过`priority`参数指定。
+    - 任务的类型可以通过`task_type`参数指定。
+    - 任务的处理不是实时的，这样的好处是可以避免线程阻塞，提高性能。
+    - 可以通过`/tasks/check`和`/tasks/result`接口查询任务状态和结果。
+    - 后续会提供一个回调接口，用于在任务完成时通知客户端。
+
+    ### 参数说明:
+
+    - `file` (UploadFile): 上传的媒体文件，支持Ffmpeg支持的音频和视频格式。
+    - `task_type` (str): 任务类型，默认为 'transcription'，具体取值如下。
+        - 当后端使用`openai_whisper`引擎时，支持如下取值:
+            - `transcribe`: 转录任务。
+            - `translate`: 根据`language`参数指定的语言进行翻译任务。
+        - 当后端使用`faster_whisper`引擎时，支持如下取值:
+            - `transcribe`: 转录任务。
+            - `translate`: 根据`language`参数指定的语言进行翻译任务。
+    - `priority` (TaskPriority): 任务优先级，默认为 `TaskPriority.NORMAL`。
+    - `language` (str): 指定输出语言，例如 'en' 或 'zh'，留空则自动检测。
+    - `temperature` (Union[float, List[float]]): 采样温度，可以是单个值或值列表，默认为 0.2。
+    - `compression_ratio_threshold` (float): 压缩比阈值，默认为 2.4。
+    - `no_speech_threshold` (float): 无声部分的概率阈值，默认为 0.6。
+    - `condition_on_previous_text` (bool): 在连续语音中更准确地理解上下文，默认为 True。
+    - `initial_prompt` (str): 初始提示文本，默认为空。
+    - `word_timestamps` (bool): 是否提取每个词的时间戳信息，默认为 False。
+    - `prepend_punctuations` (str): 前置标点符号集合，默认为 "\"'“¿([{-"。
+    - `append_punctuations` (str): 后置标点符号集合，默认为 "\"'.。,，!！?？:：”)]}、"。
+    - `clip_timestamps` (Union[str, List[float]]): 裁剪时间戳，避免超出范围问题，默认为 "0"。
+    - `hallucination_silence_threshold` (Optional[float]): 幻听静音阈值，默认为 None。
+
+    ### 返回:
+
+    - 返回一个包含任务信息的响应，包括任务ID、状态、优先级等信息。
+
+    ### 错误代码说明:
+
+    - `500`: 未知错误。
+
+    # [English]
+
+    ### Purpose:
+
+    - Upload a media file and create a Whisper task to be processed in the background.
+    - The processing priority of the task can be specified using the `priority` parameter.
+    - The type of task can be specified using the `task_type` parameter.
+    - The processing of the task is not real-time, which avoids thread blocking and improves performance.
+    - The status and results of the task can be queried using the `/tasks/check` and `/tasks/result` endpoints.
+    - A callback endpoint will be provided in the future to notify the client when the task is completed.
+
+    ### Parameters:
+
+    - `file` (UploadFile): The uploaded media file, supporting audio and video formats supported by Ffmpeg.
+    - `task_type` (str): The type of
+    task, default is 'transcription', specific values are as follows.
+        - When the backend uses the 'openai_whisper' engine, the following values are supported:
+            - `transcribe`: Transcription task.
+            - `translate`: Translation task based on the language specified by the `language` parameter.
+        - When the backend uses the 'faster_whisper' engine, the following values are supported:
+            - `transcribe`: Transcription task.
+            - `translate`: Translation task based on the language specified by the `language` parameter.
+    - `priority` (TaskPriority): Task priority, default is `TaskPriority.NORMAL`.
+    - `language` (str): Specify the output language, e.g., 'en' or 'zh', leave empty for auto-detection.
+    - `temperature` (Union[float, List[float]]): Sampling temperature, can be a single value or a list of values, default is 0.2.
+    - `compression_ratio_threshold` (float): Compression ratio threshold, default is 2.4.
+    - `no_speech_threshold` (float): No-speech probability threshold, default is 0.6.
+    - `condition_on_previous_text` (bool): Condition on previous text for more accurate understanding of context in continuous speech, default is True.
+    - `initial_prompt` (str): Initial prompt text, default is empty.
+    - `word_timestamps` (bool): Whether to extract word-level timestamp information, default is False.
+    - `prepend_punctuations` (str): Prepend punctuation characters, default is "\"'“¿([{-".
+    - `append_punctuations` (str): Append punctuation characters, default is "\"'.。,，!！?？:：”)]}、".
+    - `clip_timestamps` (Union[str, List[float]]): Clip timestamps to avoid out-of-range issues, default is "0".
+    - `hallucination_silence_threshold` (Optional[float]): Hallucination silence threshold, default is None.
+
+    ### Returns:
+
+    - Returns a response containing task information, including task ID, status, priority, etc.
+
+    ### Error Code Description:
+
+    - `500`: Unknown error.
+    """
     try:
         decode_options = {
             "language": language if language else None,
@@ -93,12 +181,13 @@ async def create_transcription_task(
         task_info = await request.app.state.whisper_service.create_transcription_task(
             file=file,
             decode_options=decode_options,
+            task_type=task_type,
             priority=priority,
             request=request
         )
         return ResponseModel(code=200,
                              router=str(request.url),
-                             params=dict(request.query_params),
+                             params=decode_options | {"task_type": task_type, "priority": priority},
                              data=task_info.to_dict())
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
@@ -107,7 +196,7 @@ async def create_transcription_task(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=ErrorResponseModel(
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                message="An unexpected error occurred while creating the transcription task.",
+                message=f"An unexpected error occurred while creating the transcription task: {str(e)}",
                 router=str(request.url),
                 params=dict(request.query_params),
             ).dict()
@@ -122,15 +211,60 @@ async def get_task_status(
         request: Request,
         task_id: int = Query(description="任务ID / Task ID")
 ):
+    """
+    # [中文]
+
+    ### 用途说明:
+    - 获取指定任务的状态信息。
+
+    ### 参数说明:
+    - `task_id` (int): 任务ID。
+
+    ### 返回:
+    - 返回一个包含任务状态信息的响应，包括任务ID、状态、优先级等信息。
+
+    ### 错误代码说明:
+
+    - `404`: 任务未找到，可能是任务ID不存在。
+    - `500`: 未知错误。
+
+    # [English]
+
+    ### Purpose:
+    - Get the status information of the specified task.
+
+    ### Parameters:
+    - `task_id` (int): Task ID.
+
+    ### Returns:
+    - Returns a response containing task status information, including task ID, status, priority, etc.
+
+    ### Error Code Description:
+
+    - `404`: Task not found, possibly because the task ID does not exist.
+    - `500`: Unknown error.
+    """
     try:
         async with request.app.state.db_manager.get_session() as session:
             task_info = await session.get(Task, task_id)
             if not task_info:
-                raise HTTPException(status_code=404, detail="Task not found in the database.")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=ErrorResponseModel(
+                        code=status.HTTP_404_NOT_FOUND,
+                        message="Task not found.",
+                        router=str(request.url),
+                        params=dict(request.query_params),
+                    ).dict()
+                )
             return ResponseModel(code=200,
                                  router=str(request.url),
                                  params=dict(request.query_params),
                                  data=task_info.to_dict())
+
+    except HTTPException as http_error:
+        raise http_error
+
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
@@ -138,7 +272,7 @@ async def get_task_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=ErrorResponseModel(
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                message="An unexpected error occurred while retrieving the task status.",
+                message=f"An unexpected error occurred while retrieving the task status: {str(e)}",
                 router=str(request.url),
                 params=dict(request.query_params),
             ).dict()
@@ -149,9 +283,46 @@ async def get_task_status(
             summary="获取任务结果 / Get task result",
             response_model=ResponseModel)
 async def get_task_result(
-    request: Request,
-    task_id: int = Query(description="任务ID / Task ID")
+        request: Request,
+        task_id: int = Query(description="任务ID / Task ID")
 ):
+    """
+    # [中文]
+
+    ### 用途说明:
+    - 获取指定任务的结果信息。
+
+    ### 参数说明:
+    - `task_id` (int): 任务ID。
+
+    ### 返回:
+    - 返回一个包含任务结果信息的响应，包括任务ID、状态、优先级等信息。
+
+    ### 错误代码说明:
+
+    - `404`: 任务未找到，可能是任务ID不存在。
+    - `202`: 任务尚未完成。
+    - `503`: 数据库错误。
+    - `500`: 未知错误。
+
+    # [English]
+
+    ### Purpose:
+    - Get the result information of the specified task.
+
+    ### Parameters:
+    - `task_id` (int): Task ID.
+
+    ### Returns:
+    - Returns a response containing task result information, including task ID, status, priority, etc.
+
+    ### Error Code Description:
+
+    - `404`: Task not found, possibly because the task ID does not exist.
+    - `202`: The task is not yet completed.
+    - `503`: Database error.
+    - `500`: Unknown error.
+    """
     try:
         async with request.app.state.db_manager.get_session() as session:
             task = await session.get(Task, task_id)
@@ -166,10 +337,10 @@ async def get_task_result(
                     ).dict()
                 )
             if task.status != TaskStatus.COMPLETED:
-                return HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                raise HTTPException(
+                    status_code=status.HTTP_202_ACCEPTED,
                     detail=ErrorResponseModel(
-                        code=status.HTTP_400_BAD_REQUEST,
+                        code=status.HTTP_202_ACCEPTED,
                         message="Task is not completed yet.",
                         router=str(request.url),
                         params=dict(request.query_params),
@@ -194,6 +365,9 @@ async def get_task_result(
             ).dict()
         )
 
+    except HTTPException as http_error:
+        raise http_error
+
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
@@ -201,7 +375,7 @@ async def get_task_result(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=ErrorResponseModel(
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                message="An unexpected error occurred while retrieving the task result.",
+                message=f"An unexpected error occurred while retrieving the task result: {str(e)}",
                 router=str(request.url),
                 params=dict(request.query_params),
             ).dict()
@@ -220,17 +394,47 @@ async def extract_audio(
         background_tasks: BackgroundTasks = None
 ):
     """
-    提取视频文件中的音频部分。
+    # [中文]
 
-    参数 | Parameters:
-        file (UploadFile): 上传的视频文件。
-        sample_rate (int): 采样率。
-        bit_depth (int): 位深度。
-        output_format (str): 输出格式，'wav' 或 'mp3'。
-        background_tasks (BackgroundTasks): FastAPI 的后台任务。
+    ### 用途说明:
 
-    返回 | Returns:
-        FileResponse: 包含音频文件的响应。
+    - 从视频文件中提取音频。
+
+    ### 参数说明:
+
+    - `file` (UploadFile): 上传的视频文件。
+    - `sample_rate` (int): 采样率。
+    - `bit_depth` (int): 位深度。
+    - `output_format` (str): 输出格式，'wav' 或 'mp3'。
+
+    ### 返回:
+
+    - 包含音频文件的响应。
+
+    ### 错误代码说明:
+
+    - `500`: 未知错误。
+
+    # [English]
+
+    ### Purpose:
+
+    - Extract audio from a video file.
+
+    ### Parameters:
+
+    - `file` (UploadFile): The uploaded video file.
+    - `sample_rate` (int): The sample rate.
+    - `bit_depth` (int): The bit depth.
+    - `output_format` (str): The output format, 'wav' or 'mp3'.
+
+    ### Returns:
+
+    - A response containing the audio file.
+
+    ### Error Code Description:
+
+    - `500`: Unknown error.
     """
     try:
         response = await request.app.state.whisper_service.extract_audio_from_video(
@@ -249,7 +453,7 @@ async def extract_audio(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=ErrorResponseModel(
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                message="An unexpected error occurred while extracting audio from the video file.",
+                message=f"An unexpected error occurred while extracting audio from the video file: {str(e)}",
                 router=str(request.url),
                 params=dict(request.query_params),
             ).dict()
