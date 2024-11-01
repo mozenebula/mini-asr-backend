@@ -32,7 +32,7 @@
 import traceback
 from typing import Union, List, Optional
 
-from fastapi import Request, APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks, Query, status
+from fastapi import Request, APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks, Query, status, Body
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.utils.logging_utils import configure_logging
@@ -57,6 +57,8 @@ async def task_create(
                                 description="媒体文件（支持的格式：音频和视频，如 MP3, WAV, MP4, MKV 等） / Media file (supported formats: audio and video, e.g., MP3, WAV, MP4, MKV)"),
         task_type: str = Form("transcribe",
                               description="任务类型，默认为 'transcription'，具体取值请参考文档 / Task type, default is 'transcription', refer to the documentation for specific values"),
+        callback_url: Optional[str] = Form("",
+                                           description="回调URL，任务完成时通知客户端 / Callback URL to notify the client when the task is completed"),
         priority: TaskPriority = Form(TaskPriority.NORMAL, description="任务优先级 / Task priority"),
         language: str = Form("",
                              description="指定输出语言，例如 'en' 或 'zh'，留空则自动检测 / Specify the output language, e.g., 'en' or 'zh', leave empty for auto-detection"),
@@ -87,19 +89,23 @@ async def task_create(
     - 任务的处理优先级可以通过`priority`参数指定。
     - 任务的类型可以通过`task_type`参数指定。
     - 任务的处理不是实时的，这样的好处是可以避免线程阻塞，提高性能。
-    - 可以通过`/tasks/check`和`/tasks/result`接口查询任务状态和结果。
-    - 后续会提供一个回调接口，用于在任务完成时通知客户端。
+    - 可以通过`/tasks/result`接口查询任务结果。
+    - 此接口提供一个回调参数，用于在任务完成时通知客户端，默认发送一个 POST 请求，你可以在接口文档中回调测试接口查看示例。
 
     ### 参数说明:
 
     - `file` (UploadFile): 上传的媒体文件，支持Ffmpeg支持的音频和视频格式。
     - `task_type` (str): 任务类型，默认为 'transcription'，具体取值如下。
-        - 当后端使用`openai_whisper`引擎时，支持如下取值:
+        - 当后端使用 `openai_whisper` 引擎时，支持如下取值:
             - `transcribe`: 转录任务。
             - `translate`: 根据`language`参数指定的语言进行翻译任务。
-        - 当后端使用`faster_whisper`引擎时，支持如下取值:
+        - 当后端使用 `faster_whisper` 引擎时，支持如下取值:
             - `transcribe`: 转录任务。
             - `translate`: 根据`language`参数指定的语言进行翻译任务。
+    - `callback_url` (Optional[str]): 回调URL，任务完成时通知客户端，默认为空。
+        - 任务完成后回调程序会发送一个 POST 请求，包含任务数据。
+        - 你可以参考接口文档中的回调测试接口在控制台查看回调信息。
+        - 例如：`http://localhost/api/whisper/callback/test`
     - `priority` (TaskPriority): 任务优先级，默认为 `TaskPriority.NORMAL`。
     - `language` (str): 指定输出语言，例如 'en' 或 'zh'，留空则自动检测。
     - `temperature` (Union[float, List[float]]): 采样温度，可以是单个值或值列表，默认为 0.2。
@@ -129,20 +135,24 @@ async def task_create(
     - The processing priority of the task can be specified using the `priority` parameter.
     - The type of task can be specified using the `task_type` parameter.
     - The processing of the task is not real-time, which avoids thread blocking and improves performance.
-    - The status and results of the task can be queried using the `/tasks/check` and `/tasks/result` endpoints.
-    - A callback endpoint will be provided in the future to notify the client when the task is completed.
+    - The task result can be queried using the `/tasks/result` endpoint.
+    - This endpoint provides a callback interface to notify the client when the task is completed, which sends a POST request by default. You can view an example in the callback test interface in the API documentation.
 
     ### Parameters:
 
     - `file` (UploadFile): The uploaded media file, supporting audio and video formats supported by Ffmpeg.
     - `task_type` (str): The type of
     task, default is 'transcription', specific values are as follows.
-        - When the backend uses the 'openai_whisper' engine, the following values are supported:
+        - When the backend uses the `openai_whisper` engine, the following values are supported:
             - `transcribe`: Transcription task.
             - `translate`: Translation task based on the language specified by the `language` parameter.
-        - When the backend uses the 'faster_whisper' engine, the following values are supported:
+        - When the backend uses the `faster_whisper` engine, the following values are supported:
             - `transcribe`: Transcription task.
             - `translate`: Translation task based on the language specified by the `language` parameter.
+    - `callback_url` (Optional[str]): Callback URL to notify the client when the task is completed, default is empty.
+        - The callback program will send a POST request containing task data after the task is completed.
+        - You can view the callback information in the console by referring to the callback test interface in the API documentation.
+        - For example: `http://localhost/api/whisper/callback/test`
     - `priority` (TaskPriority): Task priority, default is `TaskPriority.NORMAL`.
     - `language` (str): Specify the output language, e.g., 'en' or 'zh', leave empty for auto-detection.
     - `temperature` (Union[float, List[float]]): Sampling temperature, can be a single value or a list of values, default is 0.2.
@@ -180,6 +190,7 @@ async def task_create(
         }
         task_info = await request.app.state.whisper_service.create_transcription_task(
             file=file,
+            callback_url=callback_url,
             decode_options=decode_options,
             task_type=task_type,
             priority=priority,
@@ -187,7 +198,11 @@ async def task_create(
         )
         return ResponseModel(code=200,
                              router=str(request.url),
-                             params=decode_options | {"task_type": task_type, "priority": priority},
+                             params=decode_options | {
+                                 "task_type": task_type,
+                                 "priority": priority,
+                                 "callback_url": callback_url
+                             },
                              data=task_info.to_dict())
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
@@ -249,8 +264,8 @@ async def task_query(
             "created_before": "2024-12-31T23:59:59",
             "language": "",
             "engine_name": "faster_whisper",
-            "has_result": true,
-            "has_error": false,
+            "has_result": True,
+            "has_error": False,
             "limit": 10,
             "offset": 0
         }
@@ -271,12 +286,12 @@ async def task_query(
                         "language": "en",
                         "engine_name": "faster_whisper",
                         "result": {...},
-                        "error_message": null
+                        "error_message": None
                     },
                     ...
                 ],
                 "total_count": 55,
-                "has_more": true,
+                "has_more": True,
                 "next_offset": 10
             }
         }
@@ -321,8 +336,8 @@ async def task_query(
             "created_before": "2024-12-31T23:59:59",
             "language": "",
             "engine_name": "faster_whisper",
-            "has_result": true,
-            "has_error": false,
+            "has_result": True,
+            "has_error": False,
             "limit": 10,
             "offset": 0
         }
@@ -343,12 +358,12 @@ async def task_query(
                         "language": "en",
                         "engine_name": "faster_whisper",
                         "result": {...},
-                        "error_message": null
+                        "error_message": None
                     },
                     ...
                 ],
                 "total_count": 55,
-                "has_more": true,
+                "has_more": True,
                 "next_offset": 10
             }
         }
@@ -358,17 +373,28 @@ async def task_query(
     - `500`: Unknown error, usually an internal error.
     """
 
-    async with request.app.state.db_manager.get_session() as session:
-        result = await request.app.state.db_manager.query_tasks(session, params)
-        if result is None:
-            raise HTTPException(status_code=500, detail="An error occurred while querying tasks.")
+    try:
+        result = await request.app.state.db_manager.query_tasks(params)
 
-    return ResponseModel(
-        code=200,
-        router=str(request.url),
-        params=params.dict(),
-        data=result
-    )
+        return ResponseModel(
+            code=200,
+            router=str(request.url),
+            params=params.dict(),
+            data=result
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ErrorResponseModel(
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message=f"An unexpected error occurred while creating the transcription task: {str(e)}",
+                router=str(request.url),
+                params=dict(request.query_params),
+            ).dict()
+        )
 
 
 @router.get("/tasks/result",
@@ -468,6 +494,563 @@ async def task_result(
             detail=ErrorResponseModel(
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 message=f"An unexpected error occurred while retrieving the task result: {str(e)}",
+                router=str(request.url),
+                params=dict(request.query_params),
+            ).dict()
+        )
+
+
+@router.post("/callback/test",
+             summary="测试回调接口 | Test callback interface",
+             response_model=ResponseModel)
+async def callback_test(
+        request: Request,
+        callback_data: dict = Body(..., description="回调请求体 / Callback request body")
+):
+    """
+    # [中文]
+
+    ### 用途说明:
+    - 测试回调接口，用于测试回调功能是否正常。
+    - 在本地测试时，你可以使用此接口来验证回调功能是否正常。
+    - 在创建任务时，你可以提供此接口的URL作为回调URL，如：`http://localhost/api/whisper/callback/test`。
+    - 你可以参考此接口的设计来实现自己的回调接口。
+
+    ### 参数说明:
+    - `callback_data` (dict): 任务完成后发送的回调数据，如果未提供则使用演示数据。
+
+    ### 返回:
+    - 返回一个包含回调数据的响应。
+
+    ### 错误代码说明:
+
+    - `500`: 未知错误。
+
+    # [English]
+
+    ### Purpose:
+    - Test the callback interface to verify that the callback function works correctly.
+    - When testing locally, you can use this endpoint to verify that the callback function works correctly.
+    - When creating a task, you can provide the URL of this endpoint as the callback URL, e.g., `http://localhost/api/whisper/callback/test`.
+    - You can refer to the design of this endpoint to implement your own callback interface.
+
+    ### Parameters:
+    - `callback_data` (dict): Callback data sent after the task is completed, use demo data if not provided.
+
+    ### Returns:
+    - Returns a response containing callback data.
+
+    ### Error Code Description:
+
+    - `500`: Unknown error.
+    """
+    try:
+        # 如果未提供回调数据，则使用演示数据 | Use demo data if callback data is not provided
+        callback_data = callback_data or {
+            "id": 1,
+            "status": "completed",
+            "callback_url": "",
+            "priority": "normal",
+            "engine_name": "faster_whisper",
+            "task_type": "transcribe",
+            "created_at": "2024-11-01T00:37:15.319257",
+            "updated_at": "2024-11-01T00:37:18.743966",
+            "task_processing_time": 1.784804,
+            "file_path": "C:\\Users\\Evil0ctal\\PycharmProjects\\Whisper-Speech-to-Text-API\\temp_files\\e01342d1fdf54d85ad5ed59f0de8c80e.mp4",
+            "file_name": "Example.mp4",
+            "file_size_bytes": 1244080,
+            "file_duration": 11.774,
+            "language": "zh",
+            "decode_options": {
+                "language": None,
+                "temperature":
+                    [
+                        0.2
+                    ],
+                "compression_ratio_threshold": 2.4,
+                "no_speech_threshold": 0.6,
+                "condition_on_previous_text": True,
+                "initial_prompt": "",
+                "word_timestamps": False,
+                "prepend_punctuations": "\"'“¿([{-",
+                "append_punctuations": "\"'.。,，!！?？:：”)]}、",
+                "clip_timestamps":
+                    [
+                        0
+                    ],
+                "hallucination_silence_threshold": 0
+            },
+            "error_message": None,
+            "output_url": "http://127.0.0.1/api/whisper/tasks/result?task_id=1",
+            "result": {
+                "transcription": "吃饭了吗 吃饭了 等我吃完饭再来找你玩哦 好",
+                "segments": [],
+                "info": {
+                    "language": "zh",
+                    "language_probability": 0.974609375,
+                    "duration": 11.7739375,
+                    "duration_after_vad": 11.7739375,
+                    "all_language_probs":
+                        [
+                            [
+                                "zh",
+                                0.974609375
+                            ],
+                            [
+                                "en",
+                                0.006671905517578125
+                            ],
+                            [
+                                "nn",
+                                0.00337982177734375
+                            ],
+                            [
+                                "jw",
+                                0.003078460693359375
+                            ],
+                            [
+                                "ja",
+                                0.001781463623046875
+                            ],
+                            [
+                                "vi",
+                                0.0015239715576171875
+                            ],
+                            [
+                                "ko",
+                                0.0014314651489257812
+                            ],
+                            [
+                                "ar",
+                                0.0006604194641113281
+                            ],
+                            [
+                                "pt",
+                                0.0006504058837890625
+                            ],
+                            [
+                                "ms",
+                                0.0005559921264648438
+                            ],
+                            [
+                                "th",
+                                0.0005025863647460938
+                            ],
+                            [
+                                "cy",
+                                0.000453948974609375
+                            ],
+                            [
+                                "pl",
+                                0.00042319297790527344
+                            ],
+                            [
+                                "km",
+                                0.0004134178161621094
+                            ],
+                            [
+                                "de",
+                                0.0003821849822998047
+                            ],
+                            [
+                                "es",
+                                0.0003733634948730469
+                            ],
+                            [
+                                "ru",
+                                0.0003676414489746094
+                            ],
+                            [
+                                "haw",
+                                0.0003094673156738281
+                            ],
+                            [
+                                "fr",
+                                0.0002586841583251953
+                            ],
+                            [
+                                "la",
+                                0.0002586841583251953
+                            ],
+                            [
+                                "tr",
+                                0.00018775463104248047
+                            ],
+                            [
+                                "id",
+                                0.00018489360809326172
+                            ],
+                            [
+                                "si",
+                                0.0001556873321533203
+                            ],
+                            [
+                                "it",
+                                0.00014972686767578125
+                            ],
+                            [
+                                "yue",
+                                0.0001270771026611328
+                            ],
+                            [
+                                "tl",
+                                0.00012314319610595703
+                            ],
+                            [
+                                "br",
+                                0.0000826716423034668
+                            ],
+                            [
+                                "uk",
+                                0.00007468461990356445
+                            ],
+                            [
+                                "ro",
+                                0.0000718235969543457
+                            ],
+                            [
+                                "sn",
+                                0.0000680088996887207
+                            ],
+                            [
+                                "nl",
+                                0.00006335973739624023
+                            ],
+                            [
+                                "hu",
+                                0.00006145238876342773
+                            ],
+                            [
+                                "my",
+                                0.00005817413330078125
+                            ],
+                            [
+                                "sv",
+                                0.00004357099533081055
+                            ],
+                            [
+                                "cs",
+                                0.0000432133674621582
+                            ],
+                            [
+                                "he",
+                                0.00003933906555175781
+                            ],
+                            [
+                                "fa",
+                                0.00003236532211303711
+                            ],
+                            [
+                                "mi",
+                                0.00003039836883544922
+                            ],
+                            [
+                                "da",
+                                0.00002562999725341797
+                            ],
+                            [
+                                "el",
+                                0.00002384185791015625
+                            ],
+                            [
+                                "hi",
+                                0.000022351741790771484
+                            ],
+                            [
+                                "ur",
+                                0.000019311904907226562
+                            ],
+                            [
+                                "ta",
+                                0.000016808509826660156
+                            ],
+                            [
+                                "no",
+                                0.000014901161193847656
+                            ],
+                            [
+                                "fi",
+                                0.000013470649719238281
+                            ],
+                            [
+                                "hr",
+                                0.000011324882507324219
+                            ],
+                            [
+                                "gl",
+                                0.000010788440704345703
+                            ],
+                            [
+                                "ml",
+                                0.000010669231414794922
+                            ],
+                            [
+                                "sa",
+                                0.00001043081283569336
+                            ],
+                            [
+                                "bs",
+                                0.000009775161743164062
+                            ],
+                            [
+                                "ca",
+                                0.000008046627044677734
+                            ],
+                            [
+                                "yo",
+                                0.000007450580596923828
+                            ],
+                            [
+                                "sk",
+                                0.000006139278411865234
+                            ],
+                            [
+                                "eu",
+                                0.000006020069122314453
+                            ],
+                            [
+                                "lo",
+                                0.000004231929779052734
+                            ],
+                            [
+                                "oc",
+                                0.000004231929779052734
+                            ],
+                            [
+                                "bn",
+                                0.000003933906555175781
+                            ],
+                            [
+                                "ht",
+                                0.0000036954879760742188
+                            ],
+                            [
+                                "sl",
+                                0.0000035762786865234375
+                            ],
+                            [
+                                "yi",
+                                0.0000032186508178710938
+                            ],
+                            [
+                                "sw",
+                                0.000003159046173095703
+                            ],
+                            [
+                                "fo",
+                                0.0000030994415283203125
+                            ],
+                            [
+                                "be",
+                                0.0000029206275939941406
+                            ],
+                            [
+                                "bg",
+                                0.000002562999725341797
+                            ],
+                            [
+                                "bo",
+                                0.0000024437904357910156
+                            ],
+                            [
+                                "ne",
+                                0.0000023245811462402344
+                            ],
+                            [
+                                "te",
+                                0.000002086162567138672
+                            ],
+                            [
+                                "az",
+                                0.0000019073486328125
+                            ],
+                            [
+                                "mn",
+                                0.0000016689300537109375
+                            ],
+                            [
+                                "kk",
+                                0.0000014901161193847656
+                            ],
+                            [
+                                "pa",
+                                0.0000010132789611816406
+                            ],
+                            [
+                                "hy",
+                                0.0000010132789611816406
+                            ],
+                            [
+                                "sd",
+                                8.940696716308594e-7
+                            ],
+                            [
+                                "ps",
+                                8.344650268554688e-7
+                            ],
+                            [
+                                "sr",
+                                8.344650268554688e-7
+                            ],
+                            [
+                                "lt",
+                                7.152557373046875e-7
+                            ],
+                            [
+                                "lv",
+                                7.152557373046875e-7
+                            ],
+                            [
+                                "is",
+                                6.556510925292969e-7
+                            ],
+                            [
+                                "mr",
+                                5.364418029785156e-7
+                            ],
+                            [
+                                "ln",
+                                2.384185791015625e-7
+                            ],
+                            [
+                                "af",
+                                1.7881393432617188e-7
+                            ],
+                            [
+                                "et",
+                                1.1920928955078125e-7
+                            ],
+                            [
+                                "kn",
+                                5.960464477539063e-8
+                            ],
+                            [
+                                "gu",
+                                5.960464477539063e-8
+                            ],
+                            [
+                                "sq",
+                                5.960464477539063e-8
+                            ],
+                            [
+                                "mk",
+                                5.960464477539063e-8
+                            ],
+                            [
+                                "ka",
+                                5.960464477539063e-8
+                            ],
+                            [
+                                "as",
+                                5.960464477539063e-8
+                            ],
+                            [
+                                "uz",
+                                0
+                            ],
+                            [
+                                "so",
+                                0
+                            ],
+                            [
+                                "tk",
+                                0
+                            ],
+                            [
+                                "mt",
+                                0
+                            ],
+                            [
+                                "lb",
+                                0
+                            ],
+                            [
+                                "mg",
+                                0
+                            ],
+                            [
+                                "tt",
+                                0
+                            ],
+                            [
+                                "tg",
+                                0
+                            ],
+                            [
+                                "ha",
+                                0
+                            ],
+                            [
+                                "ba",
+                                0
+                            ],
+                            [
+                                "su",
+                                0
+                            ],
+                            [
+                                "am",
+                                0
+                            ]
+                        ],
+                    "transcription_options":
+                        [
+                            5,
+                            5,
+                            1,
+                            1,
+                            1,
+                            0,
+                            -1,
+                            0.6,
+                            2.4,
+                            True,
+                            0.5,
+                            [
+                                0.2
+                            ],
+                            "",
+                            None,
+                            True,
+                            [
+                                -1
+                            ],
+                            False,
+                            1,
+                            False,
+                            "\"'“¿([{-",
+                            "\"'.。,，!！?？:：”)]}、",
+                            None,
+                            [
+                                0
+                            ],
+                            0,
+                            None
+                        ],
+                    "vad_options": None
+                }
+            }
+        }
+
+        logger.info(f"Callback interface received data: {callback_data}")
+
+        return ResponseModel(
+            code=status.HTTP_200_OK,
+            router=str(request.url),
+            params=callback_data,
+            data={
+                "message": "Callback interface test successful.",
+                "callback_data": callback_data
+            }
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ErrorResponseModel(
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message=f"An unexpected error occurred while testing the callback interface: {str(e)}",
                 router=str(request.url),
                 params=dict(request.query_params),
             ).dict()

@@ -35,10 +35,10 @@ import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import select, case
-from sqlalchemy.ext.asyncio import AsyncSession
+from app.crawlers.base_crawler import BaseCrawler
 
 from app.database.database import DatabaseManager
 from app.database.models import Task, TaskStatus, TaskPriority
@@ -338,3 +338,37 @@ class TaskProcessor:
                 asyncio.run(self.file_utils.delete_file(task.file_path))
             else:
                 self.logger.debug(f"Keeping temporary file: {task.file_path}")
+
+            # 发送回调通知 | Send callback notification
+            if task.callback_url:
+                asyncio.run(self._send_callback_notification(task))
+
+    async def _send_callback_notification(self,
+                                          task: Task,
+                                          proxies: Optional[dict] = None,
+                                          headers: Optional[dict] = None
+                                          ) -> None:
+        """
+        发送任务处理结果的回调通知。
+
+        Sends a callback notification with the result of the task processing.
+
+        :param task: 要发送回调通知的任务实例 | Task instance to send callback notification for
+        :param proxies: 可选的代理设置 | Optional proxy settings
+        :param headers: 可选的请求头 | Optional request headers
+        :return: None
+        """
+        headers = headers or {
+            "User-Agent": "Whisper-Speech-to-Text-API/Callback (https://github.com/Evil0ctal/Whisper-Speech-to-Text-API)"
+        }
+        try:
+            async with BaseCrawler(proxies=proxies, crawler_headers=headers) as crawler:
+                callback_url = task.callback_url
+                task_data = await self.db_manager.get_task_by_id(task.id)
+                self.logger.info(f"Sending callback notification for task {task.id} to: {callback_url}")
+                response = await crawler.fetch_post_json(endpoint=callback_url, params=task_data)
+                self.logger.info(f"Callback notification sent successfully: {response}")
+
+        except Exception as e:
+            self.logger.error(f"Error sending callback notification: {str(e)}")
+            self.logger.error(traceback.format_exc())

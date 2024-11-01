@@ -66,6 +66,8 @@ class Task(Base):
     id = Column(Integer, primary_key=True)
     # 任务类型 | Task type
     task_type = Column(String, nullable=False)
+    # 回调 URL | Callback URL
+    callback_url = Column(String, nullable=True)
     # 任务优先级 | Task priority
     priority = Column(Enum(TaskPriority), default=TaskPriority.NORMAL)
     # 任务状态，初始为 QUEUED | Task status, initially QUEUED
@@ -105,7 +107,8 @@ class Task(Base):
         return {
             'id': self.id,
             'status': self.status.value,
-            'priority': self.priority,
+            'callback_url': self.callback_url,
+            'priority': self.priority.value,
             'engine_name': self.engine_name,
             'task_type': self.task_type,
             'created_at': self.created_at.isoformat() if self.created_at else None,

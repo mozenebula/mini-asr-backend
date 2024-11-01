@@ -48,8 +48,15 @@ class DatabaseManager:
     _session_factory = None
 
     @classmethod
-    async def initialize(cls, database_url: str):
-        """初始化数据库引擎和会话工厂 | Initialize database engine and session factory"""
+    async def initialize(cls, database_url: str) -> None:
+        """
+        初始化数据库引擎和会话工厂
+
+        Initialize database engine and session factory
+
+        :param database_url: 数据库 URL | Database URL
+        :return: None
+        """
         if not cls._engine:
             cls._engine = create_async_engine(database_url, echo=False)
             cls._session_factory = sessionmaker(
@@ -61,8 +68,14 @@ class DatabaseManager:
             await cls.init_db()
 
     @classmethod
-    async def init_db(cls):
-        """初始化数据库表 | Initialize database tables"""
+    async def init_db(cls) -> None:
+        """
+        初始化数据库表
+
+        Initialize database tables
+
+        :return: None
+        """
         try:
             async with cls._engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
@@ -75,12 +88,25 @@ class DatabaseManager:
     @classmethod
     @asynccontextmanager
     async def get_session(cls) -> AsyncSession:
-        """获取数据库会话生成器 | Get a database session generator"""
+        """
+        获取数据库会话生成器
+
+        Get a database session generator
+
+        :return: 数据库会话 | Database session
+        """
         async with cls._session_factory() as session:
             yield session
 
     async def get_task_by_id(self, task_id: int) -> Optional[dict]:
-        """根据ID异步获取任务 | Asynchronously get task by ID"""
+        """
+        根据ID异步获取任务
+
+        Asynchronously get task by ID
+
+        :param task_id: 任务ID | Task ID
+        :return: 任务信息 | Task details
+        """
         async with self._session_factory() as session:
             try:
                 task = await session.get(Task, task_id)
@@ -90,8 +116,15 @@ class DatabaseManager:
                 logger.error(traceback.format_exc())
                 return None
 
-    async def add_task(self, task: Task):
-        """异步添加新任务 | Asynchronously add new task"""
+    async def add_task(self, task: Task) -> None:
+        """
+        异步添加新任务
+
+        Asynchronously add new task
+
+        :param task: Task 对象 | Task object
+        :return: None
+        """
         async with self._session_factory() as session:
             try:
                 session.add(task)
@@ -102,7 +135,15 @@ class DatabaseManager:
                 await session.rollback()
 
     async def update_task(self, task_id: int, **kwargs) -> Optional[dict]:
-        """异步更新任务信息 | Asynchronously update task details"""
+        """
+        异步更新任务信息
+
+        Asynchronously update task details
+
+        :param task_id: 任务ID | Task ID
+        :param kwargs: 需要更新的字段 | Fields to update
+        :return: 更新后的任务信息 | Updated task details
+        """
         async with self._session_factory() as session:
             try:
                 task = await session.get(Task, task_id)
@@ -135,7 +176,14 @@ class DatabaseManager:
                 return False
 
     async def get_all_tasks(self, limit: int = 100) -> List[dict]:
-        """异步获取所有任务，支持限制返回数量 | Asynchronously get all tasks with a limit"""
+        """
+        异步获取所有任务，支持限制返回数量
+
+        Asynchronously get all tasks with a limit
+
+        :param limit: 返回数量限制 | Limit of returned tasks
+        :return: 任务列表 | List of tasks
+        """
         async with self._session_factory() as session:
             try:
                 result = await session.execute(select(Task).limit(limit))
@@ -146,55 +194,60 @@ class DatabaseManager:
                 logger.error(traceback.format_exc())
                 return []
 
-    async def query_tasks(self,
-                          session: AsyncSession,
-                          filters: QueryTasksOptionalFilter) -> Optional[Dict[str, List[Dict]]]:
+    async def query_tasks(self, filters: QueryTasksOptionalFilter) -> Optional[Dict[str, List[Dict]]]:
         """
         按条件查询任务，使用分页和条件查询
 
         Query tasks with pagination and conditions.
+
+        :param filters: QueryTasksOptionalFilter 对象 | QueryTasksOptionalFilter object
+        :return: 查询结果 | Query result
         """
-        try:
-            # 构建查询条件 | Build query conditions
-            conditions = self._build_conditions(filters)
+        async with self._session_factory() as session:
+            try:
+                # 构建查询条件 | Build query conditions
+                conditions = self._build_query_conditions(filters)
 
-            # 构建查询语句 | Build query statement
-            query = (
-                select(Task)
-                .where(and_(*conditions))
-                .order_by(Task.created_at)
-                .offset(filters.offset)
-                .limit(filters.limit)
-            )
+                # 构建查询语句 | Build query statement
+                query = (
+                    select(Task)
+                    .where(and_(*conditions))
+                    .order_by(Task.created_at)
+                    .offset(filters.offset)
+                    .limit(filters.limit)
+                )
 
-            result = await session.execute(query)
-            tasks = result.scalars().all()
+                result = await session.execute(query)
+                tasks = result.scalars().all()
 
-            # 获取总记录数 | Get total count
-            count_query = select(func.count()).select_from(Task).where(and_(*conditions))
-            total_count = (await session.execute(count_query)).scalar()
+                # 获取总记录数 | Get total count
+                count_query = select(func.count()).select_from(Task).where(and_(*conditions))
+                total_count = (await session.execute(count_query)).scalar()
 
-            # 计算是否有更多数据，并返回 next_offset 以供下一页查询 | Calculate if there are more data and return next_offset for next page query
-            has_more = filters.offset + filters.limit < total_count
-            next_offset = filters.offset + filters.limit if has_more else None
+                # 计算是否有更多数据，并返回 next_offset 以供下一页查询 | Calculate if there are more data and return next_offset for next page query
+                has_more = filters.offset + filters.limit < total_count
+                next_offset = filters.offset + filters.limit if has_more else None
 
-            return {
-                "tasks": [task.to_dict() for task in tasks],
-                "total_count": total_count,
-                "has_more": has_more,
-                "next_offset": next_offset
-            }
+                return {
+                    "tasks": [task.to_dict() for task in tasks],
+                    "total_count": total_count,
+                    "has_more": has_more,
+                    "next_offset": next_offset
+                }
 
-        except SQLAlchemyError as e:
-            logger.error(f"Error querying tasks: {e}")
-            logger.error(traceback.format_exc())
-            return None
+            except SQLAlchemyError as e:
+                logger.error(f"Error querying tasks: {e}")
+                logger.error(traceback.format_exc())
+                raise
 
-    def _build_conditions(self, filters: QueryTasksOptionalFilter) -> List:
+    def _build_query_conditions(self, filters: QueryTasksOptionalFilter) -> List:
         """
         根据 QueryTasksOptionalFilter 对象构建查询条件
 
         Build query conditions based on QueryTasksOptionalFilter.
+
+        :param filters: QueryTasksOptionalFilter 对象 | QueryTasksOptionalFilter object
+        :return: 查询条件列表 | List of query conditions
         """
         conditions = []
         if filters.status:

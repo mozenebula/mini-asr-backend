@@ -176,6 +176,7 @@ class WhisperService:
     async def create_transcription_task(
             self,
             file: UploadFile,
+            callback_url: Optional[str],
             decode_options: dict,
             task_type: str,
             priority: str,
@@ -189,6 +190,7 @@ class WhisperService:
         async with self.db_manager.get_session() as session:
             task = Task(
                 engine_name=self.model_pool.engine,
+                callback_url=callback_url,
                 task_type=task_type,
                 file_path=temp_file_path,
                 file_name=file.filename,
