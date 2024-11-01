@@ -35,11 +35,10 @@ import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional
-
+from types import GeneratorType
+from typing import List, Optional, Any, Iterable
 from sqlalchemy import select, case
 from app.crawlers.base_crawler import BaseCrawler
-
 from app.database.database import DatabaseManager
 from app.database.models import Task, TaskStatus, TaskPriority
 from app.model_pool.async_model_pool import AsyncModelPool
@@ -260,6 +259,12 @@ class TaskProcessor:
                 # 记录任务开始时间 | Record task start time
                 task_start_time: datetime.datetime = datetime.datetime.utcnow()
 
+                # 更新任务状态和结果 | Update task status and result
+                task_update = {
+                    "status": TaskStatus.PROCESSING
+                }
+                asyncio.run(self.db_manager.update_task(task.id, **task_update))
+
                 # 执行转录任务 | Perform transcription task
                 if self.model_pool.engine == "openai_whisper":
                     result = model.transcribe(task.file_path, **task.decode_options or {}, task=task.task_type)
@@ -267,10 +272,12 @@ class TaskProcessor:
                     result['text'] = " ".join([seg['text'] for seg in result['segments']])
                 elif self.model_pool.engine == "faster_whisper":
                     segments, info = model.transcribe(task.file_path, **task.decode_options or {}, task=task.task_type)
+                    segments_list = list(segments) if isinstance(segments, GeneratorType) else segments
+                    info_dict = info._asdict() if hasattr(info, "_asdict") else info
                     result = {
                         "transcription": " ".join([seg.text for seg in segments]),
-                        "segments": [segment._asdict() for segment in segments],
-                        "info": info._asdict()
+                        "segments": segments_list,
+                        "info": info_dict
                     }
                     language = info.language
                 else:
@@ -372,3 +379,29 @@ class TaskProcessor:
         except Exception as e:
             self.logger.error(f"Error sending callback notification: {str(e)}")
             self.logger.error(traceback.format_exc())
+
+    @staticmethod
+    def segments_to_dict(obj: Any) -> Any:
+        """
+        使用递归方式将Faster Whisper的 NamedTuple 转换为字典。
+
+        Recursively converts a NamedTuple from Faster Whisper to a dictionary.
+
+        :param obj: 要转换的对象 | Object to convert
+        :return: 转换后的对象 | Converted object
+        """
+        # 检查对象是否具有 _asdict 方法（适用于 NamedTuple 实例）
+        if hasattr(obj, "_asdict"):
+            return {key: TaskProcessor.segments_to_dict(value) for key, value in obj._asdict().items()}
+        # 如果是列表或元组，递归转换每个元素，并保持类型
+        elif isinstance(obj, (list, tuple)):
+            return type(obj)(TaskProcessor.segments_to_dict(item) for item in obj)
+        # 如果是字典，递归转换每个键值对
+        elif isinstance(obj, dict):
+            return {key: TaskProcessor.segments_to_dict(value) for key, value in obj.items()}
+        # 如果是其他可迭代类型，转为列表后递归处理
+        elif isinstance(obj, Iterable) and not isinstance(obj, (str, bytes)):
+            return [TaskProcessor.segments_to_dict(item) for item in obj]
+        # 直接返回非复杂类型
+        return obj
+

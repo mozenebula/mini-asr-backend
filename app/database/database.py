@@ -98,7 +98,7 @@ class DatabaseManager:
         async with cls._session_factory() as session:
             yield session
 
-    async def get_task_by_id(self, task_id: int) -> Optional[dict]:
+    async def get_task_by_id(self, task_id: int) -> Optional[Task]:
         """
         根据ID异步获取任务
 
@@ -110,7 +110,7 @@ class DatabaseManager:
         async with self._session_factory() as session:
             try:
                 task = await session.get(Task, task_id)
-                return task.to_dict() if task else None
+                return task if task else None
             except SQLAlchemyError as e:
                 logger.error(f"Error fetching task by ID {task_id}: {e}")
                 logger.error(traceback.format_exc())
@@ -160,7 +160,14 @@ class DatabaseManager:
                 return None
 
     async def delete_task(self, task_id: int) -> bool:
-        """根据ID异步删除任务 | Asynchronously delete task by ID"""
+        """
+        根据ID异步删除任务
+
+        Asynchronously delete task by ID
+
+        :param task_id: 任务ID | Task ID
+        :return: 是否删除成功 | Whether the deletion was successful
+        """
         async with self._session_factory() as session:
             try:
                 task = await session.get(Task, task_id)

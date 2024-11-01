@@ -31,13 +31,18 @@
 
 import traceback
 from typing import Union, List, Optional
-
 from fastapi import Request, APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks, Query, status, Body
 from sqlalchemy.exc import SQLAlchemyError
-
 from app.utils.logging_utils import configure_logging
 from app.api.models.APIResponseModel import ResponseModel, ErrorResponseModel
-from app.database.models import Task, TaskStatus, TaskPriority, QueryTasksOptionalFilter
+from app.database.models import (
+    TaskStatus,
+    TaskStatusHttpCode,
+    TaskStatusHttpMessage,
+    TaskPriority,
+    QueryTasksOptionalFilter
+)
+
 
 router = APIRouter()
 
@@ -47,7 +52,7 @@ logger = configure_logging(name=__name__)
 
 # 创建任务 | Create task
 @router.post(
-    "/task/create",
+    "/tasks/create",
     response_model=ResponseModel,
     summary="上传媒体文件并且创建一个Whisper转录任务在后台处理 | Upload a media file and create a Whisper transcription task to be processed in the background"
 )
@@ -89,7 +94,7 @@ async def task_create(
     - 任务的处理优先级可以通过`priority`参数指定。
     - 任务的类型可以通过`task_type`参数指定。
     - 任务的处理不是实时的，这样的好处是可以避免线程阻塞，提高性能。
-    - 可以通过`/tasks/result`接口查询任务结果。
+    - 可以通过`/api/whisper/tasks/result`端点查询任务结果。
     - 此接口提供一个回调参数，用于在任务完成时通知客户端，默认发送一个 POST 请求，你可以在接口文档中回调测试接口查看示例。
 
     ### 参数说明:
@@ -135,7 +140,7 @@ async def task_create(
     - The processing priority of the task can be specified using the `priority` parameter.
     - The type of task can be specified using the `task_type` parameter.
     - The processing of the task is not real-time, which avoids thread blocking and improves performance.
-    - The task result can be queried using the `/tasks/result` endpoint.
+    - The task result can be queried using the `/api/whisper/tasks/result` endpoint.
     - This endpoint provides a callback interface to notify the client when the task is completed, which sends a POST request by default. You can view an example in the callback test interface in the API documentation.
 
     ### Parameters:
@@ -236,17 +241,17 @@ async def task_query(
 
     ### 参数说明:
     - `status` (TaskStatus): 筛选任务状态：
-        - 例如 'queued'（排队中）或 'processing'（处理中）或 'completed'（已完成） 或 'failed'（失败）。
+        - 例如 `queued`（在队列中）、`processing`（处理中）、`completed`（已完成）或`failed`（失败）。
     - `priority` (TaskPriority): 筛选任务优先级：
-        - 例如 'low'、'normal'、'high'。
-    - `created_after` (str): 创建时间的起始时间，格式为 'YYYY-MM-DDTHH:MM:SS'，为空时忽略该条件。
-    - `created_before` (str): 创建时间的结束时间，格式为 'YYYY-MM-DDTHH:MM:SS'，为空时忽略该条件。
-    - `language` (str): 任务的语言代码，例如 `zh`或'en'。设置为空字符串 `""` 可以查询所有语言的任务。
-    - `engine_name` (str): 引擎名称，例如 'faster_whisper'或'openai_whisper'。
+        - 例如 `low`、`normal`、`high`。
+    - `created_after` (str): 创建时间的起始时间，格式为 `YYYY-MM-DDTHH:MM:SS`，为空时忽略该条件。
+    - `created_before` (str): 创建时间的结束时间，格式为 `YYYY-MM-DDTHH:MM:SS`，为空时忽略该条件。
+    - `language` (str): 任务的语言代码，例如 `zh`或 `en`。设置为空字符串 `""` 可查询所有语言的任务。
+    - `engine_name` (str): 引擎名称，例如 `faster_whisper` 或 `openai_whisper`。
     - `has_result` (bool): 指定是否要求任务有结果数据。
     - `has_error` (bool): 指定是否要求任务有错误信息。
-    - `limit` (int): 每页的记录数量，默认值为20，用户可根据需求自定义每页数量。
-    - `offset` (int): 数据分页的起始位置，默认值为0，后续使用响应中的 `next_offset` 值进行下一页查询。
+    - `limit` (int): 每页的记录数量，默认值为 `20`，用户可以根据需要自定义每页的记录数。
+    - `offset` (int): 数据分页的起始位置，默认值为 `0`，使用响应中的 `next_offset` 值进行下一页查询。
 
     ### 返回:
     - `tasks` (list): 包含满足条件的任务列表，每个任务记录包括任务ID、状态、优先级、创建时间等详细信息。
@@ -259,7 +264,7 @@ async def task_query(
         ```json
         {
             "status": "completed",
-            "priority": "high",
+            "priority": "normal",
             "created_after": "2024-01-01T00:00:00",
             "created_before": "2024-12-31T23:59:59",
             "language": "",
@@ -274,14 +279,14 @@ async def task_query(
         ```json
         {
             "code": 200,
-            "router": "http://localhost/api/tasks/query",
+            "router": "http://localhost/api/whisper/tasks/query",
             "params": { ... },
             "data": {
                 "tasks": [
                     {
                         "id": 123,
                         "status": "completed",
-                        "priority": "high",
+                        "priority": "normal",
                         "created_at": "2024-05-15T12:34:56",
                         "language": "en",
                         "engine_name": "faster_whisper",
@@ -317,8 +322,8 @@ async def task_query(
     - `engine_name` (str): Engine name, e.g., 'faster_whisper' or 'openai_whisper'.
     - `has_result` (bool): Specify whether the task requires result data.
     - `has_error` (bool): Specify whether the task requires error information.
-    - `limit` (int): Number of records per page, default is 20, users can customize the number of records per page according to their needs.
-    - `offset` (int): Starting position of data pagination, default is 0, use the `next_offset` value in the response for the next page query.
+    - `limit` (int): Number of records per page, default is `20`, users can customize the number of records per page according to their needs.
+    - `offset` (int): Starting position of data pagination, default is `0`, use the `next_offset` value in the response for the next page query.
 
     ### Returns:
     - `tasks` (list): List of tasks that meet the conditions, each task record includes detailed information such as task ID, status, priority, creation time, etc.
@@ -331,7 +336,7 @@ async def task_query(
         ```json
         {
             "status": "completed",
-            "priority": "high",
+            "priority": "normal",
             "created_after": "2024-01-01T00:00:00",
             "created_before": "2024-12-31T23:59:59",
             "language": "",
@@ -346,14 +351,14 @@ async def task_query(
         ```json
         {
             "code": 200,
-            "router": "http://localhost/api/tasks/query",
+            "router": "http://localhost/api/whisper/tasks/query",
             "params": { ... },
             "data": {
                 "tasks": [
                     {
                         "id": 123,
                         "status": "completed",
-                        "priority": "high",
+                        "priority": "normal",
                         "created_at": "2024-05-15T12:34:56",
                         "language": "en",
                         "engine_name": "faster_whisper",
@@ -417,11 +422,11 @@ async def task_result(
     - 返回一个包含任务结果信息的响应，包括任务ID、状态、优先级等信息。
 
     ### 错误代码说明:
-
+    - `200`: 任务已完成，返回任务结果信息。
+    - `202`: 任务处于排队中，或正在处理中。
     - `404`: 任务未找到，可能是任务ID不存在。
-    - `202`: 任务尚未完成。
+    - `500`: 任务处理失败，或发生未知错误。
     - `503`: 数据库错误。
-    - `500`: 未知错误。
 
     # [English]
 
@@ -435,49 +440,77 @@ async def task_result(
     - Returns a response containing task result information, including task ID, status, priority, etc.
 
     ### Error Code Description:
-
+    - `200`: Task is completed, return task result information.
+    - `202`: Task is queued or processing.
     - `404`: Task not found, possibly because the task ID does not exist.
-    - `202`: The task is not yet completed.
+    - `500`: Task processing failed or an unknown error occurred.
     - `503`: Database error.
-    - `500`: Unknown error.
     """
     try:
-        async with request.app.state.db_manager.get_session() as session:
-            task = await session.get(Task, task_id)
-            if not task:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=ErrorResponseModel(
-                        code=status.HTTP_404_NOT_FOUND,
-                        message="Task not found.",
-                        router=str(request.url),
-                        params=dict(request.query_params),
-                    ).dict()
-                )
-            if task.status != TaskStatus.COMPLETED:
-                raise HTTPException(
-                    status_code=status.HTTP_202_ACCEPTED,
-                    detail=ErrorResponseModel(
-                        code=status.HTTP_202_ACCEPTED,
-                        message="Task is not completed yet.",
-                        router=str(request.url),
-                        params=dict(request.query_params),
-                    ).dict()
-                )
-            return ResponseModel(
-                code=status.HTTP_200_OK,
-                router=str(request.url),
-                params=dict(request.query_params),
-                data=task.to_dict()
+        # 通过任务ID查询任务 | Query task by task ID
+        task = await request.app.state.db_manager.get_task_by_id(task_id)
+        if not task:
+            # 任务未找到 - 返回404 | Task not found - return 404
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=ErrorResponseModel(
+                    code=status.HTTP_404_NOT_FOUND,
+                    message=TaskStatusHttpMessage.NOT_FOUND.value,
+                    router=str(request.url),
+                    params=dict(request.query_params),
+                ).dict()
             )
 
+        # 任务处于排队中 - 返回202 | Task is queued - return 202
+        if task.status == TaskStatus.QUEUED:
+            raise HTTPException(
+                status_code=TaskStatusHttpCode.QUEUED.value,
+                detail=ErrorResponseModel(
+                    code=TaskStatusHttpCode.QUEUED.value,
+                    message=TaskStatusHttpMessage.QUEUED.value,
+                    router=str(request.url),
+                    params=dict(request.query_params),
+                ).dict()
+            )
+        # 任务正在处理中 - 返回202 | Task is processing - return 202
+        elif task.status == TaskStatus.PROCESSING:
+            raise HTTPException(
+                status_code=TaskStatusHttpCode.PROCESSING.value,
+                detail=ErrorResponseModel(
+                    code=TaskStatusHttpCode.PROCESSING.value,
+                    message=TaskStatusHttpMessage.PROCESSING.value,
+                    router=str(request.url),
+                    params=dict(request.query_params),
+                ).dict()
+            )
+        # 任务失败 - 返回500 | Task failed - return 500
+        elif task.status == TaskStatus.FAILED:
+            raise HTTPException(
+                status_code=TaskStatusHttpCode.FAILED.value,
+                detail=ErrorResponseModel(
+                    code=TaskStatusHttpCode.FAILED.value,
+                    message=TaskStatusHttpMessage.FAILED.value,
+                    router=str(request.url),
+                    params=dict(request.query_params),
+                ).dict()
+            )
+
+        # 任务已完成 - 返回200 | Task is completed - return 200
+        return ResponseModel(
+            code=TaskStatusHttpCode.COMPLETED.value,
+            router=str(request.url),
+            params=dict(request.query_params),
+            data=task.to_dict()
+        )
+
+    # 数据库错误 - 返回503 | Database error - return 503
     except SQLAlchemyError as db_error:
         logger.error(f"Database error: {str(db_error)}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=ErrorResponseModel(
                 code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                message="Database error occurred. Please try again later.",
+                message=TaskStatusHttpMessage.SERVICE_UNAVAILABLE.value,
                 router=str(request.url),
                 params=dict(request.query_params),
             ).dict()
@@ -486,6 +519,7 @@ async def task_result(
     except HTTPException as http_error:
         raise http_error
 
+    # 未知错误 - 返回500 | Unknown error - return 500
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")

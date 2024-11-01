@@ -31,6 +31,7 @@
 
 import enum
 import datetime as dt
+from http import HTTPStatus
 from typing import Optional
 
 from pydantic import BaseModel, constr, Field, ConfigDict, field_validator
@@ -47,6 +48,36 @@ class TaskStatus(enum.Enum):
     PROCESSING = 'processing'
     COMPLETED = 'completed'
     FAILED = 'failed'
+
+
+# TaskStatusHttpCode 枚举类，用于映射 TaskStatus 到 HTTP 状态码
+# TaskStatusHttpCode enum class, used to map TaskStatus to HTTP status code
+class TaskStatusHttpCode(enum.Enum):
+    # 202 - Accepted (for ongoing processing)
+    QUEUED = HTTPStatus.ACCEPTED
+    # 202 - Accepted (for ongoing processing)
+    PROCESSING = HTTPStatus.ACCEPTED
+    # 200 - OK (for successful completion)
+    COMPLETED = HTTPStatus.OK
+    # 500 - Internal Server Error (for task failure)
+    FAILED = HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+# TaskStatusHttpMessage 枚举类，用于映射 TaskStatus 到 HTTP 状态消息
+# TaskStatusHttpMessage enum class, used to map TaskStatus to HTTP status message
+class TaskStatusHttpMessage(enum.Enum):
+    # 202 - Accepted (for ongoing processing)
+    QUEUED = "Task is queued and not started yet"
+    # 202 - Accepted (for ongoing processing)
+    PROCESSING = "Task is currently being processed"
+    # 200 - OK (for successful completion)
+    COMPLETED = "Task has been completed"
+    # 404 - Not Found (for task not found or invalid task ID)
+    NOT_FOUND = "Task not found or has been deleted or invalid task ID"
+    # 500 - Internal Server Error (for task failure)
+    FAILED = "Task failed during processing"
+    # 503 - Service Unavailable (for database error)
+    SERVICE_UNAVAILABLE = "Database error occurred. Please try again later."
 
 
 # 定义任务优先级的枚举类型 | Define an enum for task priority
@@ -128,16 +159,25 @@ class Task(Base):
 
 # 查询任务的可选过滤器 | Query tasks optional filter
 class QueryTasksOptionalFilter(BaseModel):
-    status: Optional[TaskStatus] = Field(TaskStatus.COMPLETED, description="任务状态，例如 'queued' 或 'completed'")
-    priority: Optional[TaskPriority] = Field(TaskPriority.NORMAL, description="任务优先级，例如 'low', 'normal', 'high'")
-    created_after: Optional[str] = Field('', description="创建时间的起始时间，格式为 'YYYY-MM-DDTHH:MM:SS'")
-    created_before: Optional[str] = Field('', description="创建时间的结束时间，格式为 'YYYY-MM-DDTHH:MM:SS'")
-    language: Optional[constr(strip_whitespace=True, min_length=0, max_length=5)] = Field("", description="检测到的语言代码，空字符串表示不限制语言")
-    engine_name: Optional[constr(strip_whitespace=True, max_length=50)] = Field("faster_whisper", description="引擎名称，例如 'faster_whisper'")
-    has_result: Optional[bool] = Field(True, description="是否要求任务有结果")
-    has_error: Optional[bool] = Field(False, description="是否要求任务存在错误信息")
-    limit: int = Field(20, description="每页记录数，默认值为20")
-    offset: int = Field(0, description="分页的起始位置，默认值为0")
+    status: Optional[TaskStatus] = Field(TaskStatus.COMPLETED,
+                                         description="任务状态，例如 'queued' 或 'completed' | Task status, such as 'queued' or 'completed'")
+    priority: Optional[TaskPriority] = Field(TaskPriority.NORMAL,
+                                             description="任务优先级，例如 'low', 'normal', 'high' | Task priority, such as 'low', 'normal', 'high'")
+    created_after: Optional[str] = Field('',
+                                         description="创建时间的起始时间，格式为 'YYYY-MM-DDTHH:MM:SS' | The start time of the creation time, in the format 'YYYY-MM-DDTHH:MM:SS'")
+    created_before: Optional[str] = Field('',
+                                          description="创建时间的结束时间，格式为 'YYYY-MM-DDTHH:MM:SS' | The end time of the creation time, in the format 'YYYY-MM-DDTHH:MM:SS'")
+    language: Optional[constr(strip_whitespace=True, min_length=0, max_length=5)] = Field("",
+                                                                                          description="检测到的语言代码，空字符串表示不限制语言 | Detected language code, an empty string means no language restriction")
+    engine_name: Optional[constr(strip_whitespace=True, max_length=50)] = Field("faster_whisper",
+                                                                                description="引擎名称，例如 'faster_whisper' 或 'openai_whisper' | Engine name, such as 'faster_whisper' or 'openai_whisper'")
+    has_result: Optional[bool] = Field(True,
+                                       description="是否要求任务有结果 | Whether to require that the task has a result")
+    has_error: Optional[bool] = Field(False,
+                                      description="是否要求任务存在错误信息 | Whether to require that the task has an error message")
+    limit: int = Field(20, description="每页记录数，默认值为20 | Number of records per page, default is 20")
+    offset: int = Field(0,
+                        description="分页的起始位置，默认值为0 | The starting position of the pagination, the default value is 0")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
