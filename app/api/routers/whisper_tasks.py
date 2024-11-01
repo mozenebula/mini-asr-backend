@@ -53,7 +53,7 @@ logger = configure_logging(name=__name__)
 @router.post(
     "/tasks/create",
     response_model=ResponseModel,
-    summary="上传媒体文件并且创建一个Whisper转录任务在后台处理 | Upload a media file and create a Whisper transcription task to be processed in the background"
+    summary="上传媒体文件并且创建一个Whisper转录任务在后台处理 / Upload a media file and create a Whisper transcription task to be processed in the background"
 )
 async def task_create(
         request: Request,
@@ -225,7 +225,7 @@ async def task_create(
 # 查询任务 | Query task
 @router.post("/tasks/query",
              response_model=ResponseModel,
-             summary="查询任务 | Query task"
+             summary="查询任务 / Query task"
              )
 async def task_query(
         request: Request,
@@ -534,7 +534,7 @@ async def task_result(
 
 
 @router.post("/callback/test",
-             summary="测试回调接口 | Test callback interface",
+             summary="测试回调接口 / Test callback interface",
              response_model=ResponseModel)
 async def callback_test(
         request: Request,
