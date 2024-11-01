@@ -31,8 +31,9 @@
 
 import traceback
 from typing import Union, List, Optional
-from fastapi import Request, APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks, Query, status, Body
 from sqlalchemy.exc import SQLAlchemyError
+from fastapi import Request, APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks, Query, status, Body
+from fastapi.responses import FileResponse
 from app.utils.logging_utils import configure_logging
 from app.api.models.APIResponseModel import ResponseModel, ErrorResponseModel
 from app.database.models import (
@@ -53,7 +54,7 @@ logger = configure_logging(name=__name__)
 @router.post(
     "/tasks/create",
     response_model=ResponseModel,
-    summary="上传媒体文件并且创建一个Whisper转录任务在后台处理 / Upload a media file and create a Whisper transcription task to be processed in the background"
+    summary="创建任务 / Create task"
 )
 async def task_create(
         request: Request,
@@ -181,7 +182,8 @@ async def task_create(
     try:
         decode_options = {
             "language": language if language else None,
-            "temperature": [float(temp) for temp in temperature.split(",")] if "," in temperature else float(temperature),
+            "temperature": [float(temp) for temp in temperature.split(",")] if "," in temperature else float(
+                temperature),
             "compression_ratio_threshold": compression_ratio_threshold,
             "no_speech_threshold": no_speech_threshold,
             "condition_on_previous_text": condition_on_previous_text,
@@ -192,7 +194,7 @@ async def task_create(
             "clip_timestamps": clip_timestamps,
             "hallucination_silence_threshold": hallucination_silence_threshold
         }
-        task_info = await request.app.state.whisper_service.create_transcription_task(
+        task_info = await request.app.state.whisper_service.create_whisper_task(
             file=file,
             callback_url=callback_url,
             decode_options=decode_options,
@@ -202,12 +204,17 @@ async def task_create(
         )
         return ResponseModel(code=200,
                              router=str(request.url),
-                             params=decode_options | {
+                             params={
+                                 **decode_options,
                                  "task_type": task_type,
                                  "priority": priority,
                                  "callback_url": callback_url
                              },
                              data=task_info.to_dict())
+
+    except HTTPException as http_error:
+        raise http_error
+
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
@@ -387,6 +394,9 @@ async def task_query(
             data=result
         )
 
+    except HTTPException as http_error:
+        raise http_error
+
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
@@ -401,6 +411,93 @@ async def task_query(
         )
 
 
+# 根据任务ID删除任务 | Delete task by task ID
+@router.delete("/tasks/delete",
+               summary="根据任务ID删除任务 / Delete task by task ID",
+               response_model=ResponseModel)
+async def task_delete(
+        request: Request,
+        task_id: int = Query(description="任务ID / Task ID")
+):
+    """
+    # [中文]
+
+    ### 用途说明:
+    - 根据任务ID删除任务，删除后任务数据将被永久删除。
+
+    ### 参数说明:
+    - `task_id` (int): 任务ID。
+
+    ### 返回:
+    - 返回一个包含删除任务信息的响应，包括任务ID、状态、优先级等信息。
+
+    ### 错误代码说明:
+    - `200`: 任务删除成功。
+    - `404`: 任务未找到，可能是任务ID不存在。
+    - `500`: 未知错误。
+
+    # [English]
+
+    ### Purpose:
+    - Delete the task by task ID, and the task data will be permanently deleted after deletion.
+
+    ### Parameters:
+    - `task_id` (int): Task ID.
+
+    ### Returns:
+    - Returns a response containing the deleted task information, including task ID, status, priority, etc.
+
+    ### Error Code Description:
+    - `200`: Task deleted successfully.
+    - `404`: Task not found, possibly because the task ID does not exist.
+    - `500`: Unknown error.
+    """
+    try:
+        # 通过任务ID删除任务 | Delete task by task ID
+        task = await request.app.state.db_manager.delete_task(task_id)
+        if not task:
+            # 任务未找到 - 返回404 | Task not found - return 404
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=ErrorResponseModel(
+                    code=status.HTTP_404_NOT_FOUND,
+                    message=TaskStatusHttpMessage.NOT_FOUND.value,
+                    router=str(request.url),
+                    params=dict(request.query_params),
+                ).dict()
+            )
+
+        data = {
+            "task_id": task_id,
+            "message": "Task deleted successfully"
+        }
+
+        # 任务删除成功 - 返回200 | Task deleted successfully - return 200
+        return ResponseModel(
+            code=status.HTTP_200_OK,
+            router=str(request.url),
+            params=dict(request.query_params),
+            data=data
+        )
+
+    except HTTPException as http_error:
+        raise http_error
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ErrorResponseModel(
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="An unexpected error occurred while deleting the task",
+                router=str(request.url),
+                params=dict(request.query_params),
+            ).dict()
+        )
+
+
+# 获取任务结果 | Get task result
 @router.get("/tasks/result",
             summary="获取任务结果 / Get task result",
             response_model=ResponseModel)
@@ -447,7 +544,7 @@ async def task_result(
     """
     try:
         # 通过任务ID查询任务 | Query task by task ID
-        task = await request.app.state.db_manager.get_task_by_id(task_id)
+        task = await request.app.state.db_manager.get_task(task_id)
         if not task:
             # 任务未找到 - 返回404 | Task not found - return 404
             raise HTTPException(
@@ -1076,6 +1173,10 @@ async def callback_test(
                 "callback_data": callback_data
             }
         )
+
+    except HTTPException as http_error:
+        raise http_error
+
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
@@ -1090,17 +1191,18 @@ async def callback_test(
         )
 
 
-@router.post("/extract-audio",
+# 从视频文件中提取音频 | Extract audio from a video file
+@router.post("/extract_audio",
              summary="从视频文件中提取音频 / Extract audio from a video file")
 async def extract_audio(
         request: Request,
+        background_tasks: BackgroundTasks,
         file: UploadFile = File(...,
                                 description="视频文件，支持的格式如 MP4, MKV 等 / Video file, supported formats like MP4, MKV etc."),
         sample_rate: int = Form(22050, description="音频的采样率（单位：Hz），例如 22050 或 44100。"),
         bit_depth: int = Form(2, description="音频的位深度（1 或 2 字节），决定音频的质量和文件大小。"),
-        output_format: str = Form("wav", description="输出音频的格式，可选 'wav' 或 'mp3'。"),
-        background_tasks: BackgroundTasks = None
-):
+        output_format: str = Form("wav", description="输出音频的格式，可选 'wav' 或 'mp3'。")
+) -> FileResponse:
     """
     # [中文]
 
@@ -1147,13 +1249,16 @@ async def extract_audio(
     try:
         response = await request.app.state.whisper_service.extract_audio_from_video(
             file=file,
+            background_tasks=background_tasks,
             sample_rate=sample_rate,
             bit_depth=bit_depth,
-            output_format=output_format,
-            background_tasks=background_tasks
+            output_format=output_format
         )
-        logger.info(f"Audio extracted successfully from video file: {file.filename}")
         return response
+
+    except HTTPException as http_error:
+        raise http_error
+
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
@@ -1162,6 +1267,98 @@ async def extract_audio(
             detail=ErrorResponseModel(
                 code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 message=f"An unexpected error occurred while extracting audio from the video file: {str(e)}",
+                router=str(request.url),
+                params=dict(request.query_params),
+            ).dict()
+        )
+
+
+# 根据任务ID生成字幕文件 | Generate subtitles based on task ID
+@router.get("/generate_subtitles",
+            summary="生成字幕文件 / Generate subtitles file")
+async def generate_subtitles(
+        request: Request,
+        background_tasks: BackgroundTasks,
+        task_id: int = Query(description="任务ID / Task ID"),
+        output_format: str = Query("srt", description="输出格式，可选 'srt' 或 'vtt'。")
+) -> FileResponse:
+    """
+    # [中文]
+
+    ### 用途说明:
+    - 生成指定任务的字幕。
+
+    ### 参数说明:
+    - `task_id` (int): 任务ID。
+    - `output_format` (str): 输出格式，'srt' 或 'vtt'。
+
+    ### 返回:
+    - 返回一个包含字幕文件的响应。
+
+    ### 错误代码说明:
+    - `500`: 未知错误。
+
+    # [English]
+
+    ### Purpose:
+
+    - Generate subtitles for the specified task.
+
+    ### Parameters:
+
+    - `task_id` (int): Task ID.
+    - `output_format` (str): Output format, 'srt' or 'vtt'.
+
+    ### Returns:
+
+    - A response containing the subtitle file.
+
+    ### Error Code Description:
+
+    - `500`: Unknown error.
+    """
+    task = await request.app.state.db_manager.get_task(task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=ErrorResponseModel(
+                code=status.HTTP_404_NOT_FOUND,
+                message=TaskStatusHttpMessage.NOT_FOUND.value,
+                router=str(request.url),
+                params=dict(request.query_params),
+            ).dict()
+        )
+
+    if task.status != TaskStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorResponseModel(
+                code=status.HTTP_400_BAD_REQUEST,
+                message="This task is not available for generating subtitles.",
+                router=str(request.url),
+                params=dict(request.query_params),
+            ).dict()
+        )
+
+    try:
+        response = await request.app.state.whisper_service.generate_subtitle(
+            task=task,
+            output_format=output_format,
+            background_tasks=background_tasks,
+        )
+        return response
+
+    except HTTPException as http_error:
+        raise http_error
+
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ErrorResponseModel(
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message=f"An unexpected error occurred while generating subtitles: {str(e)}",
                 router=str(request.url),
                 params=dict(request.query_params),
             ).dict()

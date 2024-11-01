@@ -59,7 +59,8 @@ class FileUtils:
             auto_delete: bool = True,
             limit_file_size: bool = True,
             max_file_size: int = 2 * 1024 * 1024 * 1024,
-            temp_dir: str = './temp_files'
+            temp_dir: str = './temp_files',
+            allowed_extensions: Optional[List[str]] = None
     ) -> None:
         """
         初始化文件工具类
@@ -111,27 +112,25 @@ class FileUtils:
         self.BATCH_SIZE = batch_size
         self.DELETE_BATCH_SIZE = delete_batch_size
 
-        # 定义允许的文件扩展名（FFmpeg 支持的媒体文件）| Define allowed file extensions (FFmpeg supported media files)
-        self.ALLOWED_EXTENSIONS = [
-            '.3g2', '.3gp', '.aac', '.ac3', '.aiff', '.alac', '.amr', '.ape', '.asf', '.avi', '.avs', '.cavs', '.dirac',
-            '.dts', '.dv', '.eac3', '.f4v', '.flac', '.flv', '.g722', '.g723_1', '.g726', '.g729', '.gif', '.gsm',
-            '.h261', '.h263', '.h264', '.hevc', '.jpeg', '.jpg', '.lpcm', '.m4a', '.m4v', '.mkv', '.mlp', '.mmf',
-            '.mov', '.mp2', '.mp3', '.mp4', '.mpc', '.mpeg', '.mpg', '.oga', '.ogg', '.ogv', '.opus', '.png', '.rm',
-            '.rmvb', '.rtsp', '.sbc', '.spx', '.svcd', '.swf', '.tak', '.thd', '.tta', '.vc1', '.vcd', '.vid', '.vob',
-            '.wav', '.wma', '.wmv', '.wv', '.webm', '.yuv'
-        ]
+        # 定义允许的文件扩展名 | Define allowed file extensions
+        self.ALLOWED_EXTENSIONS = allowed_extensions
 
-    async def save_file(self, file: bytes, file_name: str) -> str:
+    async def save_file(self, file: bytes, file_name: str,
+                        generate_safe_file_name: bool = True,
+                        check_file_allowed: bool = True,
+                        ) -> str:
         """
-        保存字节文件到临时目录
+        自动生成安全的文件名，然后保存字节文件到临时目录
 
-        Save a bytes file to the temporary directory.
+        Automatically generate a safe file name, then save the byte file to the temporary directory.
 
         :param file: 要保存的文件内容 | Content of the file to save.
         :param file_name: 原始文件名 | Original file name.
+        :param generate_safe_file_name: 是否生成安全的文件名，默认为True | Whether to generate a safe file name, default is True.
+        :param check_file_allowed: 检查文件类型是否被允许，默认为True | Check if the file type is allowed, default is True.
         :return: 保存的文件路径 | Path to the saved file.
         """
-        safe_file_name = self._generate_safe_file_name(file_name)
+        safe_file_name = self._generate_safe_file_name(file_name) if generate_safe_file_name else file_name
         file_path = os.path.join(self.TEMP_DIR, safe_file_name)
         file_path = os.path.realpath(file_path)
         # 确保文件路径在 TEMP_DIR 内部 | Ensure file path is within TEMP_DIR
@@ -160,11 +159,12 @@ class FileUtils:
                 await asyncio.to_thread(os.chmod, file_path, stat.S_IRUSR | stat.S_IWUSR)
 
             # 文件类型验证 | File type validation
-            if not self.is_allowed_file_type(file_path):
-                error_msg = f"File type: {file_name} is not supported."
-                self.logger.error(error_msg)
-                await self.delete_file(file_path)
-                raise ValueError(error_msg)
+            if check_file_allowed:
+                if not self.is_allowed_file_type(file_path):
+                    error_msg = f"File type: {file_name} is not supported."
+                    self.logger.error(error_msg)
+                    await self.delete_file(file_path)
+                    raise ValueError(error_msg)
 
             self.logger.debug("File saved successfully.")
             return file_path
@@ -348,6 +348,9 @@ class FileUtils:
         :return: 如果文件类型被允许则返回True，否则返回False | True if the file type is allowed, False otherwise.
         """
         try:
+            # 如果 ALLOWED_EXTENSIONS 为空，则不限制文件类型 | If ALLOWED_EXTENSIONS is empty, do not restrict file types
+            if not self.ALLOWED_EXTENSIONS:
+                return True
             # 使用 filetype 库检测文件类型 | Detect file type using filetype library
             kind = filetype.guess(file_path)
             if kind is None:

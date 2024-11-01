@@ -35,9 +35,10 @@ import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
-from types import GeneratorType
 from typing import List, Optional, Any, Iterable
+
 from sqlalchemy import select, case
+
 from app.crawlers.base_crawler import BaseCrawler
 from app.database.database import DatabaseManager
 from app.database.models import Task, TaskStatus, TaskPriority
@@ -382,7 +383,7 @@ class TaskProcessor:
         try:
             async with BaseCrawler(proxies=proxies, crawler_headers=headers) as crawler:
                 callback_url = task.callback_url
-                task_data = await self.db_manager.get_task_by_id(task.id)
+                task_data = await self.db_manager.get_task(task.id)
                 self.logger.info(f"Sending callback notification for task {task.id} to: {callback_url}")
                 response = await crawler.fetch_post_json(endpoint=callback_url, params=task_data)
                 self.logger.info(f"Callback notification sent successfully: {response}")

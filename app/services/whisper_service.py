@@ -31,6 +31,7 @@
 
 import asyncio
 import os
+import traceback
 import uuid
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
@@ -97,22 +98,56 @@ class WhisperService:
             task_status_check_interval=self.task_status_check_interval
         )
 
+    def start_task_processor(self) -> None:
+        """
+        启动任务处理器
+
+        Start the task processor
+
+        :return: None
+        """
+        self.task_processor.start()
+
+    def stop_task_processor(self):
+        """
+        停止任务处理器
+
+        Stop the task processor
+
+        :return: None
+        """
+        self.task_processor.stop()
+
     async def extract_audio_from_video(
             self,
             file: UploadFile,
             sample_rate: int,
             bit_depth: int,
             output_format: str,
-            background_tasks: Optional[BackgroundTasks] = None
-    ):
+            background_tasks: BackgroundTasks
+    ) -> FileResponse:
+        """
+        从视频文件中提取音频。
+
+        Extract audio from a video file.
+
+        :param file: FastAPI 上传的视频文件对象 | FastAPI uploaded video file object
+        :param sample_rate: 采样率 | Sample rate
+        :param bit_depth: 位深度 | Bit depth
+        :param output_format: 输出格式，可选 'wav' 或 'mp3' | Output format, 'wav' or 'mp3'
+        :param background_tasks: FastAPI 后台任务对象 | FastAPI background tasks object
+        :return: 提取的音频 FastAPI 文件响应对象 | Extracted audio FastAPI file response object
+        """
         self.logger.debug(f"Starting audio extraction from video file: {file.filename}")
 
         if not file.content_type.startswith("video/"):
-            self.logger.warning(f"Invalid content type: {file.content_type}")
-            raise HTTPException(status_code=400, detail="File must be a video file.")
+            error_message = f"Invalid upload file type for audio extraction: {file.content_type}"
+            self.logger.error(error_message)
+            self.logger.error(traceback.format_exc())
+            raise ValueError(error_message)
 
         temp_video_path = await self.file_utils.save_uploaded_file(file)
-        self.logger.debug(f"Video file saved to temporary path: {temp_video_path}")
+        self.logger.info(f"Video file saved to temporary path: {temp_video_path}")
         temp_files_to_delete = [temp_video_path]
 
         try:
@@ -126,13 +161,13 @@ class WhisperService:
 
             self.logger.info(f"Extracting audio to WAV file: {wav_temp_path}")
             video_clip.audio.write_audiofile(wav_temp_path, fps=sample_rate, nbytes=bit_depth)
-            self.logger.debug(f"Audio extracted to WAV file: {wav_temp_path}")
+            self.logger.info(f"Audio extracted to WAV file: {wav_temp_path}")
 
             video_clip.close()
 
             if output_format == "wav":
                 temp_audio_path = wav_temp_path
-                self.logger.debug("Output format is WAV; using extracted WAV file directly.")
+                self.logger.info("Output format is WAV; using extracted WAV file directly.")
             elif output_format == "mp3":
                 self.logger.info(f"Converting WAV to MP3: {temp_audio_path}")
                 audio = AudioSegment.from_wav(wav_temp_path)
@@ -140,21 +175,18 @@ class WhisperService:
                 self.logger.debug(f"Audio converted to MP3: {temp_audio_path}")
                 temp_files_to_delete.append(temp_audio_path)
             else:
-                self.logger.warning(f"Unsupported output format: {output_format}")
-                raise HTTPException(status_code=400, detail="Unsupported output format, must be 'wav' or 'mp3'.")
+                error_message = f"Unsupported audio output format: {output_format}"
+                self.logger.error(error_message)
+                raise ValueError(error_message)
 
-            if background_tasks:
-                self.logger.debug("Adding temporary files to background tasks for deletion.")
-                for path in temp_files_to_delete:
-                    if os.path.exists(path):
-                        background_tasks.add_task(self.file_utils.delete_file, path)
-            else:
-                self.logger.debug("No background tasks provided; deleting temporary files immediately.")
-                for path in temp_files_to_delete:
-                    if os.path.exists(path):
-                        await self.file_utils.delete_file(path)
-                        self.logger.debug(f"Deleted temporary file: {path}")
+            # 将文件删除任务添加到后台任务中确保文件在返回响应后被删除
+            # Add file deletion tasks to background tasks to ensure files are deleted after response is returned
+            if Settings.FileSettings.auto_delete and temp_files_to_delete:
+                for temp_file in temp_files_to_delete:
+                    background_tasks.add_task(self.file_utils.delete_file, temp_file)
+                    self.logger.debug(f"Added file to delete in background task: {temp_file}")
 
+            # 返回提取的音频文件 | Return extracted audio file
             self.logger.info(f"Returning extracted audio file: {temp_audio_path}")
             return FileResponse(
                 temp_audio_path,
@@ -163,17 +195,13 @@ class WhisperService:
             )
         except Exception as e:
             self.logger.error(f"Audio extraction failed: {str(e)}")
-            for path in temp_files_to_delete:
-                if os.path.exists(path):
-                    await self.file_utils.delete_file(path)
-                    self.logger.debug(f"Deleted temporary file after failure: {path}")
-            raise HTTPException(status_code=500, detail=f"Audio extraction failed: {str(e)}")
+            self.logger.error(traceback.format_exc())
         finally:
             if 'video_clip' in locals():
                 video_clip.close()
-                self.logger.debug("Video clip closed.")
+                self.logger.info("Video clip closed.")
 
-    async def create_transcription_task(
+    async def create_whisper_task(
             self,
             file: UploadFile,
             callback_url: Optional[str],
@@ -182,6 +210,19 @@ class WhisperService:
             priority: str,
             request: Request
     ) -> Task:
+        """
+        创建一个 Whisper 任务然后保存到数据库。
+
+        Create a Whisper task and save it to the database.
+
+        :param file: FastAPI 上传的音频文件对象 | FastAPI uploaded audio file object
+        :param callback_url: 回调 URL | Callback URL
+        :param decode_options: Whisper 解码选项 | Whisper decode options
+        :param task_type: Whisper 任务类型 | Whisper task type
+        :param priority: 任务优先级 | Task priority
+        :param request: FastAPI 请求对象 | FastAPI request object
+        :return: 保存到数据库的任务对象 | Task object saved to the database
+        """
         temp_file_path = await self.file_utils.save_uploaded_file(file)
         self.logger.debug(f"Audio file saved to temporary path: {temp_file_path}")
 
@@ -226,10 +267,67 @@ class WhisperService:
         self.logger.debug(f"Audio file duration: {duration:.2f} seconds")
         return duration
 
-    def start_task_processor(self):
-        """启动任务处理器 | Start the task processor"""
-        self.task_processor.start()
+    async def generate_subtitle(self,
+                                task: Task,
+                                output_format: str,
+                                background_tasks: BackgroundTasks
+                                ) -> FileResponse:
+        """
+        生成字幕文件并返回文件路径。
 
-    def stop_task_processor(self):
-        """停止任务处理器 | Stop the task processor"""
-        self.task_processor.stop()
+        Generates a subtitle file and returns the file path.
+
+        :param task: 要生成字幕的任务实例 | Task instance to generate subtitles for
+        :param output_format: 输出格式，可选 'srt' 或 'vtt' | Output format, 'srt' or 'vtt'
+        :param background_tasks: FastAPI 后台任务对象 | FastAPI background tasks object
+        :return: 字幕文件路径 | Subtitle file path
+        """
+        subtitle_file_path = None
+        try:
+            # 生成字幕内容 | Generate subtitle content
+            separator = "," if output_format == "srt" else "."
+            subtitle_content = "WEBVTT\n\n" if output_format == "vtt" else ""
+            subtitle_content += "\n".join(
+                f"{segment['id']}\n{self.format_time(segment['start'], separator)} --> {self.format_time(segment['end'], separator)}\n{segment['text']}\n"
+                for segment in task.result["segments"]
+            )
+            # 保存字幕文件 | Save subtitle file
+            subtitle_file_path = await self.file_utils.save_file(
+                file=subtitle_content.encode("utf-8"),
+                file_name=f"Task_{task.id}_Subtitle.{output_format}",
+                check_file_allowed=False
+            )
+
+            # 将文件删除任务添加到后台任务中确保文件在返回响应后被删除
+            # Add file deletion tasks to background tasks to ensure files are deleted after response is returned
+            if Settings.FileSettings.auto_delete and subtitle_file_path:
+                background_tasks.add_task(self.file_utils.delete_file, subtitle_file_path)
+                self.logger.debug(f"Added subtitle file to delete in background task: {subtitle_file_path}")
+
+            # 返回字幕文件 | Return subtitle file
+            self.logger.info(f"Returning subtitle file for Task ID {task.id}: {subtitle_file_path}")
+            return FileResponse(
+                subtitle_file_path,
+                media_type="text/vtt" if output_format == "vtt" else "text/srt",
+                filename=os.path.basename(subtitle_file_path)
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to generate subtitle file for Task ID {task.id}: {e}")
+            self.logger.error(traceback.format_exc())
+            raise RuntimeError("Failed to generate subtitle") from e
+
+    @staticmethod
+    def format_time(seconds: float, separator: str) -> str:
+        """
+        将秒数格式化为 SRT 字幕时间格式。
+
+        Formats seconds as SRT subtitle time format.
+
+        :param seconds: 要格式化的秒数 | Seconds to format
+        :param separator: 分隔符 | Separator
+        :return: 格式化后的时间字符串 | Formatted time string
+        """
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        milliseconds = int((seconds % 1) * 1000)
+        return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}{separator}{milliseconds:03}"

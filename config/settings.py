@@ -129,6 +129,18 @@ class Settings:
         temp_files_dir: str = "./temp_files"
         # 是否在处理后删除临时文件 | Whether to delete temporary files after processing
         delete_temp_files_after_processing: bool = True
+        # 允许保存的文件类型，加强服务器安全性，为空列表时不限制 | Allowed file types, enhance server security, no restrictions when the list is empty
+        allowed_file_types: list = [
+            # （FFmpeg 支持的媒体文件）| (FFmpeg supported media files)
+            '.3g2', '.3gp', '.aac', '.ac3', '.aiff', '.alac', '.amr', '.ape', '.asf', '.avi', '.avs', '.cavs', '.dirac',
+            '.dts', '.dv', '.eac3', '.f4v', '.flac', '.flv', '.g722', '.g723_1', '.g726', '.g729', '.gif', '.gsm',
+            '.h261', '.h263', '.h264', '.hevc', '.jpeg', '.jpg', '.lpcm', '.m4a', '.m4v', '.mkv', '.mlp', '.mmf',
+            '.mov', '.mp2', '.mp3', '.mp4', '.mpc', '.mpeg', '.mpg', '.oga', '.ogg', '.ogv', '.opus', '.png', '.rm',
+            '.rmvb', '.rtsp', '.sbc', '.spx', '.svcd', '.swf', '.tak', '.thd', '.tta', '.vc1', '.vcd', '.vid', '.vob',
+            '.wav', '.wma', '.wmv', '.wv', '.webm', '.yuv',
+            # （字幕文件）| (Subtitle files)
+            '.srt', '.vtt',
+        ]
 
     # 日志设置 | Log settings
     class LogSettings:

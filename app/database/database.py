@@ -98,7 +98,7 @@ class DatabaseManager:
         async with cls._session_factory() as session:
             yield session
 
-    async def get_task_by_id(self, task_id: int) -> Optional[Task]:
+    async def get_task(self, task_id: int) -> Optional[Task]:
         """
         根据ID异步获取任务
 
