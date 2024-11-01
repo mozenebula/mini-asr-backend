@@ -267,21 +267,32 @@ class TaskProcessor:
 
                 # 执行转录任务 | Perform transcription task
                 if self.model_pool.engine == "openai_whisper":
-                    result = model.transcribe(task.file_path, **task.decode_options or {}, task=task.task_type)
-                    language = result.get('language')
-                    result['text'] = " ".join([seg['text'] for seg in result['segments']])
+                    transcribe_result = model.transcribe(task.file_path,
+                                                         **task.decode_options or {},
+                                                         task=task.task_type)
+                    segments = transcribe_result['segments']
+                    language = transcribe_result.get('language')
+                    # OpenAI Whisper不返回info，保持空字典 | OpenAI Whisper does not return info, keep an empty dictionary
+                    info = {}
+
                 elif self.model_pool.engine == "faster_whisper":
-                    segments, info = model.transcribe(task.file_path, **task.decode_options or {}, task=task.task_type)
-                    segments_list = list(segments) if isinstance(segments, GeneratorType) else segments
-                    info_dict = info._asdict() if hasattr(info, "_asdict") else info
-                    result = {
-                        "transcription": " ".join([seg.text for seg in segments]),
-                        "segments": segments_list,
-                        "info": info_dict
-                    }
+                    segments, info = model.transcribe(task.file_path,
+                                                      **task.decode_options or {},
+                                                      task=task.task_type)
+                    segments = [self.segments_to_dict(segment) for segment in segments]
                     language = info.language
+                    # 转换info为字典格式 | Convert info to dictionary format
+                    info = self.segments_to_dict(info)
+
                 else:
                     raise ValueError(f"Trying to process task with unsupported engine: {self.model_pool.engine}")
+
+                # 通用的结果结构 | Common result structure
+                result = {
+                    "text": " ".join([seg['text'] for seg in segments]),
+                    "segments": segments,
+                    "info": info
+                }
 
                 # 记录任务结束时间 | Record task end time
                 task_end_time: datetime.datetime = datetime.datetime.utcnow()
@@ -399,7 +410,7 @@ class TaskProcessor:
         # 如果是字典，递归转换每个键值对
         elif isinstance(obj, dict):
             return {key: TaskProcessor.segments_to_dict(value) for key, value in obj.items()}
-        # 如果是其他可迭代类型，转为列表后递归处理
+        # 如果是其他可迭代类型（如生成器），转为列表后递归处理
         elif isinstance(obj, Iterable) and not isinstance(obj, (str, bytes)):
             return [TaskProcessor.segments_to_dict(item) for item in obj]
         # 直接返回非复杂类型

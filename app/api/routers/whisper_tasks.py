@@ -43,7 +43,6 @@ from app.database.models import (
     QueryTasksOptionalFilter
 )
 
-
 router = APIRouter()
 
 # 配置日志记录器
@@ -67,10 +66,10 @@ async def task_create(
         priority: TaskPriority = Form(TaskPriority.NORMAL, description="任务优先级 / Task priority"),
         language: str = Form("",
                              description="指定输出语言，例如 'en' 或 'zh'，留空则自动检测 / Specify the output language, e.g., 'en' or 'zh', leave empty for auto-detection"),
-        temperature: Union[float, List[float]] = Form(0.2,
-                                                      description="采样温度 / Sampling temperature (can be a single value or a list of values)"),
-        compression_ratio_threshold: float = Form(2.4, description="压缩比阈值 / Compression ratio threshold"),
-        no_speech_threshold: float = Form(0.6, description="无声部分的概率阈值 / No-speech probability threshold"),
+        temperature: str = Form("0.8,1.0",
+                                description="采样温度，控制输出文本的多样性，可以是单个值或使用逗号分隔的多个值 / Sampling temperature, control the diversity of the output text, can be a single value or multiple values separated by commas"),
+        compression_ratio_threshold: float = Form(1.8, description="压缩比阈值 / Compression ratio threshold"),
+        no_speech_threshold: float = Form(0.5, description="无声部分的概率阈值 / No-speech probability threshold"),
         condition_on_previous_text: bool = Form(True,
                                                 description="在连续语音中更准确地理解上下文 / Condition on previous text"),
         initial_prompt: str = Form("", description="初始提示文本 / Initial prompt text"),
@@ -113,9 +112,9 @@ async def task_create(
         - 例如：`http://localhost/api/whisper/callback/test`
     - `priority` (TaskPriority): 任务优先级，默认为 `TaskPriority.NORMAL`。
     - `language` (str): 指定输出语言，例如 'en' 或 'zh'，留空则自动检测。
-    - `temperature` (Union[float, List[float]]): 采样温度，可以是单个值或值列表，默认为 0.2。
-    - `compression_ratio_threshold` (float): 压缩比阈值，默认为 2.4。
-    - `no_speech_threshold` (float): 无声部分的概率阈值，默认为 0.6。
+    - `temperature` (str): 采样温度，可以是单个值或使用英文逗号分隔的多个值，将在后端转换为列表，例如 "0.8,1.0"。
+    - `compression_ratio_threshold` (float): 压缩比阈值，默认为 1.8。
+    - `no_speech_threshold` (float): 无声部分的概率阈值，默认为 0.5。
     - `condition_on_previous_text` (bool): 在连续语音中更准确地理解上下文，默认为 True。
     - `initial_prompt` (str): 初始提示文本，默认为空。
     - `word_timestamps` (bool): 是否提取每个词的时间戳信息，默认为 False。
@@ -160,9 +159,9 @@ async def task_create(
         - For example: `http://localhost/api/whisper/callback/test`
     - `priority` (TaskPriority): Task priority, default is `TaskPriority.NORMAL`.
     - `language` (str): Specify the output language, e.g., 'en' or 'zh', leave empty for auto-detection.
-    - `temperature` (Union[float, List[float]]): Sampling temperature, can be a single value or a list of values, default is 0.2.
-    - `compression_ratio_threshold` (float): Compression ratio threshold, default is 2.4.
-    - `no_speech_threshold` (float): No-speech probability threshold, default is 0.6.
+    - `temperature` (str): Sampling temperature, can be a single value or multiple values separated by commas, which will be converted to a list on the backend, e.g., "0.8,1.0".
+    - `compression_ratio_threshold` (float): Compression ratio threshold, default is 1.8.
+    - `no_speech_threshold` (float): No-speech probability threshold, default is 0.5.
     - `condition_on_previous_text` (bool): Condition on previous text for more accurate understanding of context in continuous speech, default is True.
     - `initial_prompt` (str): Initial prompt text, default is empty.
     - `word_timestamps` (bool): Whether to extract word-level timestamp information, default is False.
@@ -182,7 +181,7 @@ async def task_create(
     try:
         decode_options = {
             "language": language if language else None,
-            "temperature": temperature,
+            "temperature": [float(temp) for temp in temperature.split(",")] if "," in temperature else float(temperature),
             "compression_ratio_threshold": compression_ratio_threshold,
             "no_speech_threshold": no_speech_threshold,
             "condition_on_previous_text": condition_on_previous_text,
