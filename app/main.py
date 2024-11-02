@@ -45,11 +45,15 @@ logger = configure_logging(name=__name__)
 tags_metadata = [
     {
         "name": "Health-Check",
-        "description": "**(服务器健康检查/Server Health Check)**",
+        "description": "**(服务器健康检查 / Server Health Check)**",
     },
     {
         "name": "Whisper-Tasks",
-        "description": "**(Whisper 任务/Whisper Tasks)**",
+        "description": "**(Whisper 任务 / Whisper Tasks)**",
+    },
+    {
+        "name": "Work-Flow",
+        "description": "**(工作流 / Work Flow)**",
     },
 ]
 

@@ -30,19 +30,15 @@
 # ==============================================================================
 
 from fastapi import APIRouter
-from app.api.routers import (
-    health_check,
-    whisper_tasks,
-    work_flow
-)
 
 router = APIRouter()
 
-# Health Check routers
-router.include_router(health_check.router, prefix="/health", tags=["Health-Check"])
 
-# Whisper Tasks routers
-router.include_router(whisper_tasks.router, prefix="/whisper", tags=["Whisper-Tasks"])
-
-# Work Flow routers
-router.include_router(work_flow.router, prefix="/workflow", tags=["Work-Flow"])
+# 输入一个视频链接，然后创建一个 Whisper 任务 | Input a video link, then create a Whisper task
+@router.post("/create_work_flow",
+             summary="Create a work flow",
+             description="Input a video link, then create a Whisper task",
+             response_description="Create a work flow",
+             )
+async def create_work_flow():
+    return {"message": "Create a work flow"}

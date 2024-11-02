@@ -54,7 +54,8 @@ logger = configure_logging(name=__name__)
 @router.post(
     "/tasks/create",
     response_model=ResponseModel,
-    summary="创建任务 / Create task"
+    summary="创建任务 / Create task",
+    response_description="创建任务的结果信息 / Result information of creating a task"
 )
 async def task_create(
         request: Request,
@@ -232,7 +233,8 @@ async def task_create(
 # 查询任务 | Query task
 @router.post("/tasks/query",
              response_model=ResponseModel,
-             summary="查询任务 / Query task"
+             summary="查询任务 / Query task",
+             response_description="查询任务的结果信息 / Result information of querying a task"
              )
 async def task_query(
         request: Request,
@@ -414,7 +416,9 @@ async def task_query(
 # 根据任务ID删除任务 | Delete task by task ID
 @router.delete("/tasks/delete",
                summary="根据任务ID删除任务 / Delete task by task ID",
-               response_model=ResponseModel)
+               response_model=ResponseModel,
+               response_description="删除任务的结果信息 / Result information of deleting a task"
+               )
 async def task_delete(
         request: Request,
         task_id: int = Query(description="任务ID / Task ID")
@@ -500,7 +504,9 @@ async def task_delete(
 # 获取任务结果 | Get task result
 @router.get("/tasks/result",
             summary="获取任务结果 / Get task result",
-            response_model=ResponseModel)
+            response_model=ResponseModel,
+            response_description="获取任务结果的结果信息 / Result information of getting task result"
+            )
 async def task_result(
         request: Request,
         task_id: int = Query(description="任务ID / Task ID")
@@ -632,7 +638,9 @@ async def task_result(
 
 @router.post("/callback/test",
              summary="测试回调接口 / Test callback interface",
-             response_model=ResponseModel)
+             response_model=ResponseModel,
+             response_description="测试回调接口的结果信息 / Result information of testing the callback interface"
+             )
 async def callback_test(
         request: Request,
         callback_data: dict = Body(..., description="回调请求体 / Callback request body")
@@ -1193,7 +1201,10 @@ async def callback_test(
 
 # 从视频文件中提取音频 | Extract audio from a video file
 @router.post("/extract_audio",
-             summary="从视频文件中提取音频 / Extract audio from a video file")
+             summary="从视频文件中提取音频文件 / Extract audio from a video file",
+             response_class=FileResponse,
+             response_description="包含音频文件的响应 / Response containing the audio file"
+             )
 async def extract_audio(
         request: Request,
         background_tasks: BackgroundTasks,
@@ -1275,7 +1286,10 @@ async def extract_audio(
 
 # 根据任务ID生成字幕文件 | Generate subtitles based on task ID
 @router.get("/generate_subtitles",
-            summary="生成字幕文件 / Generate subtitles file")
+            summary="生成字幕文件 / Generate subtitles file",
+            response_class=FileResponse,
+            response_description="包含字幕文件的响应 / Response containing the subtitle file"
+            )
 async def generate_subtitles(
         request: Request,
         background_tasks: BackgroundTasks,
