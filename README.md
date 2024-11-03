@@ -22,7 +22,7 @@
 
 ## 🚀 快速部署
 
-1. **Python 环境**：确保 Python 版本 >= 3.8，本项目广泛使用 `asyncio` 库进行异步处理。
+1. **Python 环境**：确保 Python 版本 >= 3.8，推荐使用 3.12版本，本项目广泛使用 `asyncio` 库进行异步处理。
 2. **安装 FFmpeg**：根据你的系统来执行以下命令来安装 FFmpeg。
    ```
    # Ubuntu or Debian System
@@ -41,7 +41,7 @@
    scoop install ffmpeg
    ```
 3. **安装 CUDA**：如需 GPU 加速，请下载并安装 [CUDA](https://developer.nvidia.com/cuda-12-4-0-download-archive)，仅使用 CPU 的用户可跳过。
-4. **安装支持CUDA的PyTorch**: `python3 -m pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118`
+4. **安装支持CUDA的PyTorch**: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`
 5. **安装项目依赖**: `pip install -r requirements.txt`
 
 ## ⚗️ 技术栈

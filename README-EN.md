@@ -42,7 +42,7 @@ scoop install ffmpeg
 ```
 
 3. **Install CUDA** : To enable GPU acceleration, download and install [CUDA](https://developer.nvidia.com/cuda-12-4-0-download-archive); CPU-only users can skip this step.
-4. **Install CUDA-Supported PyTorch** : `python3 -m pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118`
+4. **Install CUDA-Supported PyTorch** : `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`
 5. **Install Project Dependencies** : `pip install -r requirements.txt`
 
 ## ⚗️ Technology Stack

@@ -62,9 +62,6 @@ sympy==1.13.1
 tenacity==9.0.0
 tiktoken==0.8.0
 tokenizers==0.20.1
-torch==2.5.0+cu121
-torchaudio==2.5.0+cu121
-torchvision==0.20.0+cu121
 tqdm==4.66.5
 typing_extensions==4.12.2
 urllib3==2.2.3
