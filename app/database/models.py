@@ -94,11 +94,17 @@ class Task(Base):
     __tablename__ = 'tasks'
 
     # 任务ID | Task ID
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     # 任务类型 | Task type
     task_type = Column(String, nullable=False)
     # 回调 URL | Callback URL
     callback_url = Column(String, nullable=True)
+    # 回调状态码 | Callback status code
+    callback_status_code = Column(Integer, nullable=True)
+    # 回调消息 | Callback message
+    callback_message = Column(String, nullable=True)
+    # 回调时间 | Callback time
+    callback_time = Column(DateTime, nullable=True)
     # 任务优先级 | Task priority
     priority = Column(Enum(TaskPriority), default=TaskPriority.NORMAL)
     # 任务状态，初始为 QUEUED | Task status, initially QUEUED
@@ -139,6 +145,9 @@ class Task(Base):
             'id': self.id,
             'status': self.status.value,
             'callback_url': self.callback_url,
+            'callback_status_code': self.callback_status_code,
+            'callback_message': self.callback_message,
+            'callback_time': self.callback_time.isoformat() if self.callback_time else None,
             'priority': self.priority.value,
             'engine_name': self.engine_name,
             'task_type': self.task_type,
@@ -155,6 +164,15 @@ class Task(Base):
             'output_url': self.output_url,
             'result': self.result
         }
+
+
+class WorkFlow(Base):
+    __tablename__ = 'work_flows'
+
+    # 工作流ID | Work flow ID
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # TODO: 完善工作流字段 | Improve work flow fields
 
 
 # 查询任务的可选过滤器 | Query tasks optional filter

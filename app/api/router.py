@@ -33,7 +33,7 @@ from fastapi import APIRouter
 from app.api.routers import (
     health_check,
     whisper_tasks,
-    work_flow
+    work_flows
 )
 
 router = APIRouter()
@@ -45,4 +45,4 @@ router.include_router(health_check.router, prefix="/health", tags=["Health-Check
 router.include_router(whisper_tasks.router, prefix="/whisper", tags=["Whisper-Tasks"])
 
 # Work Flow routers
-router.include_router(work_flow.router, prefix="/workflow", tags=["Work-Flow"])
+router.include_router(work_flows.router, prefix="/workflow", tags=["Work-Flows"])

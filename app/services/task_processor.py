@@ -38,8 +38,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional, Any, Iterable
 
 from sqlalchemy import select, case
-
-from app.crawlers.base_crawler import BaseCrawler
+from app.services.callback_service import CallbackService
 from app.database.database import DatabaseManager
 from app.database.models import Task, TaskStatus, TaskPriority
 from app.model_pool.async_model_pool import AsyncModelPool
@@ -84,6 +83,7 @@ class TaskProcessor:
         self.logger = configure_logging(name=__name__)
         self.shutdown_event: threading.Event = threading.Event()
         self.db_manager: DatabaseManager = db_manager
+        self.callback_service: CallbackService = CallbackService()
         self.max_concurrent_tasks: int = max_concurrent_tasks
         self.task_status_check_interval: int = task_status_check_interval
 
@@ -360,37 +360,7 @@ class TaskProcessor:
 
             # 发送回调通知 | Send callback notification
             if task.callback_url:
-                asyncio.run(self._send_callback_notification(task))
-
-    async def _send_callback_notification(self,
-                                          task: Task,
-                                          proxies: Optional[dict] = None,
-                                          headers: Optional[dict] = None
-                                          ) -> None:
-        """
-        发送任务处理结果的回调通知。
-
-        Sends a callback notification with the result of the task processing.
-
-        :param task: 要发送回调通知的任务实例 | Task instance to send callback notification for
-        :param proxies: 可选的代理设置 | Optional proxy settings
-        :param headers: 可选的请求头 | Optional request headers
-        :return: None
-        """
-        headers = headers or {
-            "User-Agent": "Whisper-Speech-to-Text-API/Callback (https://github.com/Evil0ctal/Whisper-Speech-to-Text-API)"
-        }
-        try:
-            async with BaseCrawler(proxies=proxies, crawler_headers=headers) as crawler:
-                callback_url = task.callback_url
-                task_data = await self.db_manager.get_task(task.id)
-                self.logger.info(f"Sending callback notification for task {task.id} to: {callback_url}")
-                response = await crawler.fetch_post_json(endpoint=callback_url, params=task_data)
-                self.logger.info(f"Callback notification sent successfully: {response}")
-
-        except Exception as e:
-            self.logger.error(f"Error sending callback notification: {str(e)}")
-            self.logger.error(traceback.format_exc())
+                asyncio.run(self.callback_service.task_callback_notification(task=task, db_manager=self.db_manager))
 
     @staticmethod
     def segments_to_dict(obj: Any) -> Any:

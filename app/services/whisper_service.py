@@ -33,7 +33,7 @@ import asyncio
 import os
 import traceback
 import uuid
-from typing import Optional
+from typing import Optional, Union
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import Request, UploadFile, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
@@ -146,7 +146,7 @@ class WhisperService:
             self.logger.error(traceback.format_exc())
             raise ValueError(error_message)
 
-        temp_video_path = await self.file_utils.save_uploaded_file(file)
+        temp_video_path = await self.file_utils.save_uploaded_file(file=file, file_name=file.filename)
         self.logger.info(f"Video file saved to temporary path: {temp_video_path}")
         temp_files_to_delete = [temp_video_path]
 
@@ -203,7 +203,8 @@ class WhisperService:
 
     async def create_whisper_task(
             self,
-            file: UploadFile,
+            file: Union[UploadFile, bytes],
+            file_name: str,
             callback_url: Optional[str],
             decode_options: dict,
             task_type: str,
@@ -215,7 +216,8 @@ class WhisperService:
 
         Create a Whisper task and save it to the database.
 
-        :param file: FastAPI 上传的音频文件对象 | FastAPI uploaded audio file object
+        :param file: FastAPI 上传的文件对象或字节数据 | FastAPI uploaded file object or byte data
+        :param file_name: 文件名称 | File name
         :param callback_url: 回调 URL | Callback URL
         :param decode_options: Whisper 解码选项 | Whisper decode options
         :param task_type: Whisper 任务类型 | Whisper task type
@@ -223,7 +225,7 @@ class WhisperService:
         :param request: FastAPI 请求对象 | FastAPI request object
         :return: 保存到数据库的任务对象 | Task object saved to the database
         """
-        temp_file_path = await self.file_utils.save_uploaded_file(file)
+        temp_file_path = await self.file_utils.save_uploaded_file(file=file, file_name=file_name)
         self.logger.debug(f"Audio file saved to temporary path: {temp_file_path}")
 
         duration = await self.get_audio_duration(temp_file_path)
@@ -234,7 +236,7 @@ class WhisperService:
                 callback_url=callback_url,
                 task_type=task_type,
                 file_path=temp_file_path,
-                file_name=file.filename,
+                file_name=file_name,
                 file_size_bytes=os.path.getsize(temp_file_path),
                 decode_options=decode_options,
                 file_duration=duration,

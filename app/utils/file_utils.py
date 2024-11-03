@@ -39,7 +39,7 @@ import stat
 import filetype
 import traceback
 
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Union
 from fastapi import UploadFile
 from app.utils.logging_utils import configure_logging
 
@@ -117,8 +117,7 @@ class FileUtils:
 
     async def save_file(self, file: bytes, file_name: str,
                         generate_safe_file_name: bool = True,
-                        check_file_allowed: bool = True,
-                        ) -> str:
+                        check_file_allowed: bool = True) -> str:
         """
         自动生成安全的文件名，然后保存字节文件到临时目录
 
@@ -133,6 +132,7 @@ class FileUtils:
         safe_file_name = self._generate_safe_file_name(file_name) if generate_safe_file_name else file_name
         file_path = os.path.join(self.TEMP_DIR, safe_file_name)
         file_path = os.path.realpath(file_path)
+
         # 确保文件路径在 TEMP_DIR 内部 | Ensure file path is within TEMP_DIR
         if not file_path.startswith(os.path.realpath(self.TEMP_DIR) + os.sep):
             self.logger.error(f"Invalid file path detected: {file_path}")
@@ -153,18 +153,17 @@ class FileUtils:
             # 异步写入文件 | Asynchronously write file
             async with aiofiles.open(file_path, 'wb') as f:
                 await f.write(file)
+
             # 设置文件权限，仅所有者可读写 | Set file permissions to 600
             if os.name != 'nt':
-                # 在非 Windows 系统上设置权限 | Set permissions on non-Windows systems
                 await asyncio.to_thread(os.chmod, file_path, stat.S_IRUSR | stat.S_IWUSR)
 
             # 文件类型验证 | File type validation
-            if check_file_allowed:
-                if not self.is_allowed_file_type(file_path):
-                    error_msg = f"File type: {file_name} is not supported."
-                    self.logger.error(error_msg)
-                    await self.delete_file(file_path)
-                    raise ValueError(error_msg)
+            if check_file_allowed and not self.is_allowed_file_type(file_path):
+                error_msg = f"File type: {file_name} is not supported."
+                self.logger.error(error_msg)
+                await self.delete_file(file_path)
+                raise ValueError(error_msg)
 
             self.logger.debug("File saved successfully.")
             return file_path
@@ -173,61 +172,26 @@ class FileUtils:
             self.logger.error(traceback.format_exc())
             raise ValueError("An error occurred while saving the file.")
 
-    async def save_uploaded_file(self, file: UploadFile) -> str:
+    async def save_uploaded_file(self, file: Union[UploadFile, bytes], file_name: str) -> str:
         """
         保存FastAPI上传的文件到临时目录
 
         Save an uploaded file from FastAPI to the temporary directory.
 
-        :param file: FastAPI上传的文件对象 | File object uploaded via FastAPI.
+        :param file: FastAPI上传的文件对象或字节内容 | File object or byte content uploaded from FastAPI.
+        :param file_name: 原始文件名 | Original file name.
         :return: 保存的文件路径 | Path to the saved file.
         """
-        safe_file_name = self._generate_safe_file_name(file.filename)
-        self.logger.debug(f"Name uploaded file to: {safe_file_name}")
-        file_path = os.path.join(self.TEMP_DIR, safe_file_name)
-        file_path = os.path.realpath(file_path)
-        # 确保文件路径在 TEMP_DIR 内部 | Ensure file path is within TEMP_DIR
-        if not file_path.startswith(os.path.realpath(self.TEMP_DIR) + os.sep):
-            self.logger.error("Invalid file path detected.")
-            raise ValueError("Invalid file path detected.")
+        self.logger.debug(f"Received file of type: {type(file)}")
+        if type(file).__name__ == "UploadFile":
+            # 读取文件内容 | Read content of UploadFile
+            content = await file.read()
+        else:
+            # 如果已经是字节内容，直接使用 | If already bytes, use as is
+            content = file
 
-        # 检查是否为符号链接 | Check if the path is a symbolic link
-        if os.path.islink(file_path):
-            self.logger.error("Symbolic links are not allowed.")
-            raise ValueError("Invalid file path detected.")
-
-        try:
-            file_size = 0
-            # 异步读取和写入文件，支持大文件 | Asynchronously read and write file, supports large files
-            async with aiofiles.open(file_path, 'wb') as f:
-                while True:
-                    content = await file.read(self.CHUNK_SIZE)
-                    if not content:
-                        break
-                    file_size += len(content)
-                    # 检查文件大小限制 | Check file size limit
-                    if self.LIMIT_FILE_SIZE and file_size > self.MAX_FILE_SIZE:
-                        error_msg = f"File size exceeds the limit: {file_size} > {self.MAX_FILE_SIZE}"
-                        self.logger.error(error_msg)
-                        raise ValueError(error_msg)
-                    await f.write(content)
-            # 设置文件权限，仅所有者可读写 | Set file permissions to 600
-            if os.name != 'nt':
-                # 在非 Windows 系统上设置权限 | Set permissions on non-Windows systems
-                await asyncio.to_thread(os.chmod, file_path, stat.S_IRUSR | stat.S_IWUSR)
-
-            # 文件类型验证 | File type validation
-            if not self.is_allowed_file_type(file_path):
-                self.logger.error(f"File type: {file.filename} is not supported.")
-                await self.delete_file(file_path)
-                raise ValueError("File type is not supported.")
-
-            self.logger.debug("Uploaded file saved successfully.")
-            return file_path
-        except (OSError, IOError, ValueError) as e:
-            self.logger.error(f"Failed to save uploaded file due to an exception: {str(e)}")
-            self.logger.error(traceback.format_exc())
-            raise ValueError("An error occurred while saving the uploaded file.")
+        # 使用 save_file 方法保存文件 | Use save_file method to save the file
+        return await self.save_file(content, file_name)
 
     async def delete_files_in_batch(self, file_paths: List[str]) -> None:
         """

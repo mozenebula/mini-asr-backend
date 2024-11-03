@@ -31,77 +31,73 @@
 #
 # ==============================================================================
 
-import asyncio  # Asynchronous I/O 异步I/O
-import time  # Time operations 时间操作
+import asyncio
+import time
 from urllib.parse import urlencode
 
 from pydantic import BaseModel
-from tenacity import retry, stop_after_attempt, wait_fixed  # Retry mechanism 重试机制
+from tenacity import retry, stop_after_attempt, wait_fixed
 
-# Base crawler and TikTok API endpoints
-from app.crawlers.base_crawler import BaseCrawler
 from app.crawlers.platforms.example_tiktok.endpoints import TikTokAPIEndpoints
 from app.crawlers.platforms.example_tiktok.models import FeedVideoDetail
-
-
-def model_to_query_string(model: BaseModel) -> str:
-    """
-    Convert a Pydantic model to a URL query string.
-    将 Pydantic 模型转换为 URL 查询字符串。
-    """
-    return urlencode(model.dict())
+from app.http_client.AsyncHttpClient import BaseAsyncHttpClient
 
 
 class TikTokAPPCrawler:
     """
-    TikTok API crawler class to fetch TikTok video details.
-    TikTok API 爬虫类，用于获取 TikTok 视频详情。
+    TikTok API 爬虫类，用于获取 TikTok 视频详情 (TikTok API crawler class to fetch TikTok video details)
     """
 
-    async def get_tiktok_headers(self) -> dict:
+    @staticmethod
+    def get_tiktok_headers() -> dict:
         """
-        Generate request headers for TikTok API.
-        生成 TikTok API 的请求头。
+        生成 TikTok API 的请求头 (Generate request headers for TikTok API)
         """
         return {
-            "headers": {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36"
-                ),
-                "Referer": "https://www.tiktok.com/",
-                "Cookie": "ExampleCookie=HelloFromEvil0ctal",
-                "x-ladon": "Hello From Evil0ctal!",
-            },
-            "proxies": {"http://": None, "https://": None},
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36"
+            ),
+            "Referer": "https://www.tiktok.com/",
+            "Cookie": "ExampleCookie=HelloFromEvil0ctal",
+            "x-ladon": "Hello From Evil0ctal!",
         }
+
+    @staticmethod
+    def model_to_query_string(model: BaseModel) -> str:
+        """
+        将 Pydantic 模型转换为 URL 查询字符串 (Convert a Pydantic model to a URL query string)
+        """
+        return urlencode(model.dict())
 
     @retry(stop=stop_after_attempt(10), wait=wait_fixed(1))
     async def fetch_one_video(self, aweme_id: str) -> dict:
         """
-        Fetch a single TikTok video data by video ID (aweme_id).
-        根据视频 ID (aweme_id) 获取单个 TikTok 视频数据。
+        根据视频 ID (aweme_id) 获取单个 TikTok 视频数据 (Fetch a single TikTok video data by video ID)
+
+        :param aweme_id: 视频 ID (aweme_id) | Video ID (aweme_id)
+        :return: 视频数据 (Video data)
         """
-        # Retrieve headers and construct request parameters
-        headers = await self.get_tiktok_headers()
+        # 构造请求参数和 URL (Construct request parameters and URL)
+        headers = self.get_tiktok_headers()
         params = FeedVideoDetail(aweme_id=aweme_id)
-        param_str = model_to_query_string(params)
+        param_str = self.model_to_query_string(params)
         url = f"{TikTokAPIEndpoints.HOME_FEED}?{param_str}"
 
-        # Create and use base crawler client to fetch video data
-        async with BaseCrawler(proxies=headers["proxies"], crawler_headers=headers["headers"]) as crawler:
-            response = await crawler.fetch_get_json(url)
+        # 使用 async with 调用 BaseAsyncHttpClient 进行请求 (Use async with to call BaseAsyncHttpClient for the request)
+        async with BaseAsyncHttpClient(headers=headers) as client:
+            response = await client.fetch_get_json(url)
             video_data = response.get("aweme_list", [{}])[0]
 
-            # Verify if the fetched video ID matches the requested video ID
+            # 验证获取的视频 ID 是否与请求的 ID 匹配 (Verify if the fetched video ID matches the requested video ID)
             if video_data.get("aweme_id") != aweme_id:
                 raise ValueError("Invalid video ID (作品 ID 错误)")
-        return video_data
+
+            return video_data
 
     async def main(self):
         """
-        Main function for testing single video data fetch.
-        主函数，用于测试获取单个作品数据。
+        主函数，用于测试获取单个作品数据 (Main function for testing single video data fetch)
         """
         aweme_id = "7339393672959757570"
         response = await self.fetch_one_video(aweme_id)
@@ -109,10 +105,10 @@ class TikTokAPPCrawler:
 
 
 if __name__ == "__main__":
-    # Initialize TikTokAPPCrawler instance
+    # 初始化 TikTokAPPCrawler 实例并运行主函数 (Initialize TikTokAPPCrawler instance and run main function)
     crawler = TikTokAPPCrawler()
 
-    # Measure time taken for the fetch operation
+    # 计算获取操作的耗时 (Measure time taken for the fetch operation)
     start_time = time.time()
     asyncio.run(crawler.main())
     end_time = time.time()

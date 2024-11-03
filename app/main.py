@@ -52,8 +52,8 @@ tags_metadata = [
         "description": "**(Whisper 任务 / Whisper Tasks)**",
     },
     {
-        "name": "Work-Flow",
-        "description": "**(工作流 / Work Flow)**",
+        "name": "Work-Flows",
+        "description": "**(工作流 / Work Flows)**",
     },
 ]
 

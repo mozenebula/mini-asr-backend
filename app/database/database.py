@@ -28,13 +28,13 @@
 #              )  |  \  `.___________|/    Whisper API Out of the Box (Where is my ⭐?)
 #              `--'   `--'
 # ==============================================================================
-
+import datetime
 import traceback
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 from contextlib import asynccontextmanager
 from app.database.models import Task, Base, QueryTasksOptionalFilter
 from app.utils.logging_utils import configure_logging
@@ -274,3 +274,34 @@ class DatabaseManager:
         if filters.has_error is not None:
             conditions.append((Task.error_message != None) if filters.has_error else (Task.error_message == None))
         return conditions
+
+    async def update_task_callback_status(self, task_id: int,
+                                          callback_status_code: int,
+                                          callback_message: Optional[str],
+                                          callback_time: Union[str, datetime.datetime]
+                                          ) -> None:
+        """
+        更新任务的回调状态码、回调消息和回调时间
+
+        Update the task's callback status code, callback message, and callback time
+
+        :param task_id: 任务ID | Task ID
+        :param callback_status_code: 回调状态码 | Callback status code
+        :param callback_message: 回调消息 | Callback message
+        :param callback_time: 回调时间 | Callback time
+        :return: None
+        """
+        async with self._session_factory() as session:
+            try:
+                task = await session.get(Task, task_id)
+                if task:
+                    task.callback_status_code = callback_status_code
+                    task.callback_message = callback_message
+                    task.callback_time = callback_time
+                    await session.commit()
+                    logger.info(f"Task callback status updated for task ID {task_id}, status code: {callback_status_code}")
+                    # logger.debug(f"Task Dtail: {task.to_dict()}")
+            except SQLAlchemyError as e:
+                logger.error(f"Error updating task callback status for task ID {task_id}: {e}")
+                logger.error(traceback.format_exc())
+                await session.rollback()
