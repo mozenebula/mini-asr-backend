@@ -80,7 +80,8 @@ class AsyncModelPool:
 
                  # 模型池设置 | Model Pool Settings
                  min_size: int = 1,
-                 max_size: int = 3,
+                 max_size: int = 1,
+                 max_concurrent_tasks_per_gpu: int = 1,
                  create_with_max_concurrent_tasks: bool = True,
                  ):
         """
@@ -122,15 +123,18 @@ class AsyncModelPool:
         # 模型引擎 | Model engine
         self.engine = engine
 
+        # 检查是否有多个可用的 GPU | Check if multiple GPUs are available
+        self.num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+
         # openai_whisper 引擎设置 | openai_whisper Engine Settings
         self.openai_whisper_model_name = openai_whisper_model_name
-        self.openai_whisper_device = self.select_device(openai_whisper_device)
+        self.openai_whisper_device = openai_whisper_device
         self.openai_whisper_download_root = openai_whisper_download_root
         self.openai_whisper_in_memory = openai_whisper_in_memory
 
         # faster_whisper 引擎设置 | faster_whisper Engine Settings
         self.fast_whisper_model_size_or_path = faster_whisper_model_size_or_path
-        self.fast_whisper_device = self.select_device(faster_whisper_device)
+        self.fast_whisper_device = faster_whisper_device
         self.faster_whisper_device_index = faster_whisper_device_index
         self.fast_whisper_compute_type = faster_whisper_compute_type
         self.fast_whisper_cpu_threads = faster_whisper_cpu_threads
@@ -138,46 +142,124 @@ class AsyncModelPool:
         self.fast_whisper_download_root = faster_whisper_download_root
 
         self.min_size = min_size
-        self.max_size = max_size
+        self.max_size = self.get_optimal_max_size(max_size)
+        self.max_concurrent_tasks_per_gpu = max_concurrent_tasks_per_gpu
         self.create_with_max_concurrent_tasks = create_with_max_concurrent_tasks
-        self.pool = Queue(maxsize=max_size)
+        self.pool = Queue(maxsize=self.max_size)
         self.current_size = 0
         self.size_lock = asyncio.Lock()
         self.resize_lock = asyncio.Lock()
         self.loading_lock = asyncio.Lock()
         self._initialized = True
 
-    @staticmethod
-    def select_device(device: Optional[str] = None) -> str:
+    def allocate_device(self, instance_index: int, device_type: Optional[str], model_type: str) -> dict:
         """
-        选择要使用的设备
+        根据实例索引、设备类型和模型类型为模型实例分配设备
 
-        Selects the device to use.
+        Allocate a device for the model instance based on instance index, device type, and model type.
 
-        :param device: 指定的设备名称（可选），"cpu" 或 "cuda"。如果为 None，则自动选择 |
-                       Optional device name, "cpu" or "cuda". If None, auto-selects based on availability.
-        :return: 已选择的设备名称 | The selected device name
-        :raises ValueError: 如果指定的设备无效或不可用 | If the specified device is invalid or unavailable
+        :param instance_index: 当前模型实例的索引 | Index of the current model instance
+        :param device_type: 设备类型（"cpu", "cuda", "auto", 或 None） | Type of device ("cpu", "cuda", "auto", or None)
+        :param model_type: 模型类型（"faster_whisper" 或 "openai_whisper"） | Model type ("faster_whisper" or "openai_whisper")
+        :return: 包含设备信息的字典，适配不同的模型初始化参数 | Dictionary containing device information for different model initialization
         """
-        if device not in {None, "cpu", "cuda", "auto"}:
-            raise ValueError("Invalid device specified. Choose 'cpu', 'cuda', or leave it as None to auto-select.")
+        # 针对不同模型类型的自动设备选择逻辑 | Auto-select logic for different model types
+        if model_type == "faster_whisper" and device_type == "auto":
+            device_type = "cuda" if torch.cuda.is_available() else "cpu"
+        elif model_type == "openai_whisper" and device_type is None:
+            device_type = "cuda" if torch.cuda.is_available() else "cpu"
 
-        selected_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        # 默认分配为 CPU，compute_type 设置为 float32 | Default to CPU with compute_type set to float32
+        allocation = {"device": "cpu", "compute_type": "float32"}
 
-        if selected_device.startswith("cuda") and not torch.cuda.is_available():
-            raise ValueError("CUDA device is not available. Please ensure CUDA is installed and accessible.")
+        if device_type == "cuda" and self.num_gpus > 0:
+            if self.num_gpus == 1:
+                # 单 GPU 情况，分配到 GPU 0 并使用 float16 | Single GPU case, assign to GPU 0 with float16
+                allocation["device"] = "cuda"
+                allocation["device_index"] = 0 if model_type == "faster_whisper" else None
+                allocation["compute_type"] = "float16"
+            else:
+                # 多 GPU 情况下轮询分配 | Round-robin allocation for multiple GPUs
+                device_index = instance_index % self.num_gpus
+                allocation["device"] = "cuda" if model_type == "faster_whisper" else f"cuda:{device_index}"
+                allocation["device_index"] = device_index if model_type == "faster_whisper" else None
+                allocation["compute_type"] = "float16"
 
-        return selected_device
+        # 构建日志信息，包含系统上下文信息 | Build log information, including system context
+        gpu_message = (
+            "(Single GPU system detected, assigned to GPU 0)"
+            if self.num_gpus == 1 else
+            "(Multi-GPU system detected, assigned using round-robin)"
+            if self.num_gpus > 1 else
+            "(No GPU available or CPU explicitly specified)"
+        )
+
+        # 输出日志信息 | Log the allocation details
+        self.logger.info(f"""
+        Allocating device for model instance {instance_index}:
+        Model type      : {model_type}
+        Device type     : {device_type}
+        Total GPUs      : {self.num_gpus}
+        Total CPU Threads: {torch.get_num_threads()}
+        Max Instances   : {self.max_size}
+        Selected device : {allocation["device"]}
+        Compute type    : {allocation["compute_type"]}
+        Device index    : {allocation.get("device_index", "N/A")}
+        {gpu_message}
+        """)
+
+        return allocation
+
+    def get_optimal_max_size(self, max_size: int) -> int:
+        """
+        根据当前系统的 GPU 数量、CPU 性能和用户设置的最大池大小，返回最优的 max_size。
+
+        Return the optimal max_size based on the number of GPUs, CPU performance, and
+        the maximum pool size set by the user.
+
+        :param max_size: 用户设置的最大池大小 | Maximum pool size set by the user
+        :return: 最优的 max_size | Optimal max_size
+        """
+        # 检查用户输入是否为有效的正整数 | Validate user input
+        if max_size < 1:
+            self.logger.warning("Invalid max_size provided. Setting max_size to 1.")
+            max_size = 1
+
+        # 检测可用的 GPU 数量 | Check the number of available GPUs
+        num_gpus = torch.cuda.device_count()
+        # 获取 CPU 线程数 | Get the number of CPU threads
+        num_cpu_threads = torch.get_num_threads()
+
+        if num_gpus == 0:
+            # CPU-only 系统 | CPU-only system
+            optimal_size = 1 if num_cpu_threads <= 4 else min(max_size, num_cpu_threads // 2)
+            self.logger.info(f"No GPU available. Setting max_size to {optimal_size} for CPU-only system.")
+        elif num_gpus == 1:
+            # 单 GPU 系统 | Single GPU system
+            optimal_size = 1
+            self.logger.info("Single GPU detected. Limiting max_size to 1 to avoid GPU resource contention.")
+        else:
+            # 多 GPU 系统 | Multi-GPU system
+            max_instances_per_gpu = 2  # 假设每个 GPU 最多支持两个实例 | Assume max two instances per GPU
+            max_possible_instances = num_gpus * max_instances_per_gpu
+            optimal_size = min(max_size, max_possible_instances)
+
+            self.logger.info(f"Multiple GPUs detected ({num_gpus}). Setting max_size to {optimal_size}, "
+                             f"based on max {max_instances_per_gpu} instances per GPU.")
+
+        self.logger.info(f"Optimal Model Pool `max_size` attribute from user input: {max_size} -> {optimal_size}")
+        return optimal_size
 
     async def initialize_pool(self) -> None:
         """
-        异步初始化模型池，加载最小数量的模型实例。
+        异步初始化模型池，按批次加载模型实例以减少并发冲突。
 
-        Initialize the model pool asynchronously by loading the minimum number of model instances.
+        Initialize the model pool asynchronously by loading the minimum number of model instances in batches
+        to reduce concurrent download conflicts.
         """
-
-        # 在模型池初始化时的数量 | Number of model instances to create during model pool initialization
         instances_to_create = self.max_size if self.create_with_max_concurrent_tasks else self.min_size
+        # 每批加载的实例数，用于减少并发冲突 | Number of instances to load per batch to reduce concurrent conflicts
+        batch_size = 1
 
         self.logger.info(f"Initializing AsyncModelPool with {instances_to_create} instances...")
 
@@ -187,89 +269,70 @@ class AsyncModelPool:
                     self.logger.info("AsyncModelPool is already initialized.")
                     return
 
-                tasks = [self._create_and_put_model() for _ in range(instances_to_create)]
-                await asyncio.gather(*tasks)
+                # 分批加载模型实例 | Load model instances in batches
+                for i in range(0, instances_to_create, batch_size):
+                    tasks = [
+                        self._create_and_put_model(i + j)
+                        for j in range(batch_size)
+                        if i + j < instances_to_create
+                    ]
+                    await asyncio.gather(*tasks)
+                    self.logger.info(f"Batch of {batch_size} model instance(s) created.")
+
                 self.logger.info(f"Successfully initialized AsyncModelPool with {instances_to_create} instances.")
 
         except Exception as e:
             self.logger.error(f"Failed to initialize AsyncModelPool: {e}")
             self.logger.debug(traceback.format_exc())
 
-    async def _get_model_instance_info(self) -> dict:
-        """
-        获取模型实例信息。
-
-        Get model instance information.
-
-        :return: 模型实例信息 | Model instance information
-        :raises ValueError: 如果指定的引擎不等于 "openai_whisper" 或 "faster_whisper" | If the specified engine is not "openai_whisper" or "faster_whisper"
-        """
-        if self.engine == "openai_whisper":
-            return {
-                "model_name": self.openai_whisper_model_name,
-                "device": self.openai_whisper_device,
-                "download_root": self.openai_whisper_download_root,
-                "in_memory": self.openai_whisper_in_memory
-            }
-        elif self.engine == "faster_whisper":
-            return {
-                "model_name": self.fast_whisper_model_size_or_path,
-                "device": self.fast_whisper_device,
-                "device_index": self.faster_whisper_device_index,
-                "compute_type": self.fast_whisper_compute_type,
-                "cpu_threads": self.fast_whisper_cpu_threads,
-                "num_workers": self.fast_whisper_num_workers,
-                "download_root": self.fast_whisper_download_root
-            }
-        else:
-            raise ValueError("Invalid engine specified. Choose 'openai_whisper' or 'faster_whisper'.")
-
-    async def _create_and_put_model(self) -> None:
+    async def _create_and_put_model(self, instance_index: int) -> None:
         """
         异步创建新的模型实例并放入池中。
 
         Asynchronously create a new model instance and put it into the pool.
         """
         try:
-            # 开始时间 | Start time
-            start_time = datetime.datetime.now()
+            # 使用 allocate_device 分配设备和配置 | Use allocate_device to assign device and configuration
+            device_allocation = self.allocate_device(instance_index, self.fast_whisper_device, self.engine)
 
-            # 获取模型实例信息 | Get model instance information
-            instance_info = await self._get_model_instance_info()
+            # 输出配置信息日志 | Log configuration information
             self.logger.info(f"""
-            Attempting to create a new model instance:
-            Engine           : {self.engine}
-            Model name       : {instance_info.get("model_name")}
-            Device           : {instance_info.get("device")}
-            Current pool size: {self.current_size}
-            """)
+                    Attempting to create a new model instance with the following configuration:
+                    Engine           : {self.engine}
+                    Model name       : {self.fast_whisper_model_size_or_path if self.engine == 'faster_whisper' else self.openai_whisper_model_name}
+                    Device           : {device_allocation['device']}
+                    Compute type     : {device_allocation['compute_type']}
+                    Device index     : {device_allocation.get('device_index', 'N/A')}
+                    Instance index   : {instance_index}
+                    Current pool size: {self.current_size}
+                    """)
 
-            # 创建模型实例 | Create model instance
-
-            if self.engine == "openai_whisper":
-                model = await asyncio.to_thread(
-                    whisper.load_model,
-                    self.openai_whisper_model_name,
-                    device=self.openai_whisper_device,
-                    download_root=self.openai_whisper_download_root,
-                    in_memory=self.openai_whisper_in_memory
-                )
-            elif self.engine == "faster_whisper":
+            # 根据模型引擎类型创建实例 | Create model instance based on engine type
+            if self.engine == "faster_whisper":
+                start_time = datetime.datetime.now()
                 model = await asyncio.to_thread(
                     WhisperModel,
                     self.fast_whisper_model_size_or_path,
-                    device=self.fast_whisper_device,
-                    device_index=self.faster_whisper_device_index,
-                    compute_type=self.fast_whisper_compute_type,
+                    device=device_allocation["device"],
+                    device_index=device_allocation.get("device_index", 0),
+                    compute_type=device_allocation["compute_type"],
                     cpu_threads=self.fast_whisper_cpu_threads,
                     num_workers=self.fast_whisper_num_workers,
                     download_root=self.fast_whisper_download_root
                 )
+                end_time = datetime.datetime.now()
+            elif self.engine == "openai_whisper":
+                start_time = datetime.datetime.now()
+                model = await asyncio.to_thread(
+                    whisper.load_model,
+                    self.openai_whisper_model_name,
+                    device=device_allocation["device"],
+                    download_root=self.openai_whisper_download_root,
+                    in_memory=self.openai_whisper_in_memory
+                )
+                end_time = datetime.datetime.now()
             else:
                 raise ValueError("Invalid engine specified. Choose 'openai_whisper' or 'faster_whisper'.")
-
-            # 结束时间 | End time
-            end_time = datetime.datetime.now()
 
             # 将模型放入池中 | Put model into the pool
             await self.pool.put(model)
@@ -278,81 +341,92 @@ class AsyncModelPool:
             async with self.size_lock:
                 self.current_size += 1
 
-            instance_info = await self._get_model_instance_info()
+            # 计算加载时间（以秒为单位） | Calculate load time in seconds
+            time_taken = (end_time - start_time).total_seconds()
+
             self.logger.info(f"""
-            Successfully created and added a new model instance to the pool.
-            Engine           : {self.engine}
-            Model name       : {instance_info.get("model_name")}
-            Device           : {instance_info.get("device")}
-            Current pool size: {self.current_size}
-            Time taken       : {end_time - start_time} seconds
-            """)
+                            Successfully created and added a new model instance to the pool.
+                            Engine           : {self.engine}
+                            Device           : {device_allocation['device']}
+                            Compute type     : {device_allocation['compute_type']}
+                            Device index     : {device_allocation.get('device_index', 'N/A')}
+                            Instance index   : {instance_index}
+                            Model load time  : {time_taken:.2f} seconds
+                            Current pool size: {self.current_size}
+                            """)
 
         except Exception as e:
             self.logger.error(f"Failed to create and add model instance to the pool: {e}")
             self.logger.debug(traceback.format_exc())
 
-    async def get_model(self, timeout: Optional[float] = 5.0):
+    async def get_model(self, timeout: Optional[float] = 5.0, strategy: str = "existing"):
         """
-        异步获取模型实例。如果池为空且未达到最大大小，则创建新的模型实例。
+        异步获取模型实例。如果池为空且未达到最大大小，则按指定策略创建新的模型实例。
 
         Asynchronously retrieve a model instance. If the pool is empty and the maximum pool size
-        has not been reached, a new model instance will be created.
+        has not been reached, a new model instance will be created based on the specified strategy.
 
         :param timeout: 超时时间（以秒为单位），用于等待从池中获取模型实例。默认为 5 秒。
                         Timeout in seconds for waiting to retrieve a model instance from the pool.
                         Defaults to 5 seconds.
+        :param strategy: 获取模型的策略 ("existing", "dynamic")。默认为 "existing"。
+                         Strategy for retrieving a model instance ("existing", "dynamic"). Defaults to "existing".
 
-        :return: 模型实例 Model instance
+        :return: 模型实例 | Model instance
 
-        :raises RuntimeError: 当模型池已达到最大大小，且所有实例都正在使用时，又尝试从池中获取模型实例时。
-                                When the model pool has reached the maximum size, and all instances are in use,
-                                and an attempt is made to retrieve a model instance from the pool.
+        :raises RuntimeError: 当模型池已达到最大大小，且所有实例都正在使用时。
+                              Raises RuntimeError when the model pool is exhausted and all instances are in use.
         """
-        self.logger.info("Attempting to retrieve a model instance from the pool...")
+        self.logger.info(f"Attempting to retrieve a model instance from the pool with strategy '{strategy}'...")
         try:
-            # 如果当前池大小小于最大大小，则创建新的模型实例 | Create a new model instance if the current pool size is less than the max size
-            if self.current_size < self.max_size:
+            if strategy == "existing":
+                # 尝试从池中获取现有模型实例 | Attempt to retrieve an existing model instance
+                try:
+                    model = await asyncio.wait_for(self.pool.get(), timeout=timeout)
+                    self.logger.info("Model instance successfully retrieved from the pool (existing instance).")
+                    return model
+                except asyncio.TimeoutError:
+                    # 如果池为空且等待超时，则检查是否允许创建新实例 | Check if new instances can be created on timeout
+                    async with self.resize_lock:
+                        if self.current_size < self.max_size:
+                            instance_index = self.current_size
+                            await self._create_and_put_model(instance_index)
+                            self.current_size += 1
+                            self.logger.info(f"Pool exhausted. Created new model instance with index {instance_index}.")
+                            model = await self.pool.get()  # 获取刚创建的模型 | Retrieve the newly created model
+                            return model
+                    self.logger.error("All model instances are in use, and the pool is exhausted.")
+                    raise RuntimeError("Model pool exhausted, and all instances are currently in use.")
+
+            elif strategy == "dynamic" and self.current_size < self.max_size:
+                # 在池大小允许的情况下动态创建新模型 | Dynamically create a new model if pool size allows
                 async with self.resize_lock:
                     async with self.size_lock:
-                        add_count = self.max_size - self.current_size
-                        tasks = [self._create_and_put_model() for _ in range(add_count)]
-                        await asyncio.gather(*tasks)
-                        self.current_size += add_count
-                        self.logger.info(f"""
-                        Pool was below maximum size. Created {add_count} new model instances.
-                        New current pool size: {self.current_size} / Max size: {self.max_size}
-                        """)
+                        if self.current_size < self.max_size:
+                            instance_index = self.current_size
+                            await self._create_and_put_model(instance_index)
+                            self.current_size += 1
+                            self.logger.info(
+                                f"Dynamic creation: New model instance created with index {instance_index}.")
+                model = await asyncio.wait_for(self.pool.get(), timeout=timeout)
+                self.logger.info("Model instance successfully retrieved from the pool (dynamically created).")
+                return model
 
-            # 从池中获取模型实例 | Retrieve model instance from the pool
-            model = await asyncio.wait_for(self.pool.get(), timeout=timeout)
-            self.logger.info(f"""
-            Model instance successfully retrieved from the pool.
-            Current pool size: {self.current_size} / Max size: {self.max_size}
-            """)
-            return model
+            else:
+                # 默认尝试从池中获取模型实例 | Default: attempt to retrieve from pool
+                model = await asyncio.wait_for(self.pool.get(), timeout=timeout)
+                self.logger.info("Model instance successfully retrieved from the pool.")
+                return model
+
         except asyncio.TimeoutError:
             self.logger.warning(
                 f"Timeout ({timeout} seconds) while waiting to retrieve a model instance from the pool.")
+            raise RuntimeError("Unable to retrieve a model instance within the timeout period.")
 
-            async with self.resize_lock:
-                async with self.size_lock:
-                    if self.current_size < self.max_size:
-                        await self._create_and_put_model()
-                        self.current_size += 1
-                        self.logger.warning(f"""
-                        Pool was empty. Created a new model instance due to pool exhaustion.
-                        New current pool size: {self.current_size} / Max size: {self.max_size}
-                        """)
-                        # 从池中获取刚创建的模型实例 | Retrieve the newly created model instance from the pool
-                        model = await self.pool.get()
-                        return model
-                    else:
-                        self.logger.error(f"""
-                        Model pool exhausted and all models are currently in use.
-                        Current pool size: {self.current_size} / Max size: {self.max_size}
-                        """)
-                        raise RuntimeError("Model pool exhausted, and all models are currently in use.")
+        except Exception as e:
+            self.logger.error(f"Failed to retrieve a model instance from the pool: {e}")
+            self.logger.debug(traceback.format_exc())
+            raise RuntimeError("Unexpected error occurred while retrieving a model instance.")
 
     async def return_model(self, model) -> None:
         """
@@ -393,17 +467,25 @@ class AsyncModelPool:
 
         Asynchronously check if the model instance is healthy.
 
-        :param model: 要检查的模型实例 The model instance to check
-        :return: True 如果模型健康，否则 False True if the model is healthy, False otherwise
+        :param model: 要检查的模型实例 | The model instance to check
+        :return: True 如果模型健康，否则 False | True if the model is healthy, False otherwise
         """
         try:
-            instance_info = await self._get_model_instance_info()
-            dummy_input = torch.zeros(1, 80, 300).to(instance_info.get("device"))
+            # 使用 allocate_device 获取设备分配信息 | Use allocate_device to get device allocation info
+            device_allocation = self.allocate_device(self.current_size, self.fast_whisper_device, self.engine)
+
+            # 创建 dummy_input 并将其移到指定设备 | Create dummy_input and move it to the specified device
+            dummy_input = torch.zeros(1, 80, 300).to(device_allocation["device"])
+
+            # 检查模型健康状态 | Check model health status
             with torch.no_grad():
                 await asyncio.to_thread(model.encode, dummy_input)
+
             return True
-        except Exception:
-            self.logger.error("Model health check failed.")
+
+        except Exception as e:
+            self.logger.error(f"Model health check failed: {e}")
+            self.logger.debug(traceback.format_exc())
             return False
 
     async def _destroy_model(self, model) -> None:
@@ -418,9 +500,11 @@ class AsyncModelPool:
             # 删除模型实例的引用 | Explicitly delete the model instance reference
             del model
 
+            # 获取设备分配信息 | Get device allocation info
+            device_allocation = self.allocate_device(self.current_size, self.fast_whisper_device, self.engine)
+
             # 如果使用 GPU 则清理 CUDA 缓存 | Clear CUDA cache if using GPU
-            instance_info = await self._get_model_instance_info()
-            if instance_info.get("device").startswith("cuda"):
+            if device_allocation["device"].startswith("cuda"):
                 torch.cuda.empty_cache()
                 self.logger.info("CUDA cache cleared after model destruction.")
 

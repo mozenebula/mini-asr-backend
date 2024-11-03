@@ -182,7 +182,6 @@ class FileUtils:
         :param file_name: 原始文件名 | Original file name.
         :return: 保存的文件路径 | Path to the saved file.
         """
-        self.logger.debug(f"Received file of type: {type(file)}")
         if type(file).__name__ == "UploadFile":
             # 读取文件内容 | Read content of UploadFile
             content = await file.read()

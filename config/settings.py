@@ -59,11 +59,7 @@ class Settings:
 
     # Whisper 服务类设置 | Whisper service class settings
     class WhisperServiceSettings:
-        # 模型最大并发任务数，由于模型不是线程安全的，当并发大于1时，模型池会创建相同数量的模型实例，设置过大会造成性能问题以及未知错误！！！
-        # The maximum number of concurrent tasks for the model.
-        # Since the model is not thread-safe, when the concurrency is greater than 1,
-        # the model pool will create the same number of model instances.
-        # Setting it too large will cause performance problems and unknown errors!!!
+        # Whisper 服务的最大并发任务数，设置为 1 时为单任务模式 | The maximum number of concurrent tasks for the Whisper service, set to 1 for single task mode
         MAX_CONCURRENT_TASKS: int = 1
         # 检查任务状态的时间间隔（秒），如果设置过小可能会导致数据库查询频繁，设置过大可能会导致任务状态更新不及时。
         # Time interval for checking task status (seconds). If set too small, it may cause frequent database queries.
@@ -106,16 +102,15 @@ class Settings:
         # 最小的模型池大小 | Minimum model pool size
         min_size: int = 1
 
-        # 最大的模型池大小，建议跟 WhisperSettings.MAX_CONCURRENT_TASKS 保持一致
-        # Maximum model pool size, it is recommended to be consistent with WhisperSettings.MAX_CONCURRENT_TASKS
-        @classmethod
-        def get_max_size(cls) -> int:
-            return Settings.WhisperServiceSettings.MAX_CONCURRENT_TASKS
+        # 最大的模型池大小，如果你没有多个 GPU，建议设置为 1 | Maximum model pool size, if you don't have multiple GPUs, it is recommended to set it to 1
+        # 如果你有多个 GPU，可以设置大于 1，程序会自动为每个 GPU 创建一个模型实例 | If you have multiple GPUs, you can set it to more than 1, and the program will automatically create a model instance for each GPU
+        max_size: int = 1
 
-        # 是否在模型池初始化时以最大并发任务数创建模型实例 | Whether to create model instances with the maximum number of concurrent tasks when the model pool is initialized
-        @classmethod
-        def create_with_max_concurrent_tasks(cls) -> bool:
-            return True if cls.get_max_size() > 1 else False
+        # 每个 GPU 最多支持的实例数量，如果你的 GPU 内存足够大，可以设置大于 1 | The maximum number of instances supported by each GPU, if your GPU memory is large enough, you can set it to more than 1
+        max_concurrent_tasks_per_gpu: int = 1
+
+        # 是否在模型池初始化时以最大的模型池大小创建模型实例 | Whether to create model instances with the maximum model pool size when the model pool is initialized
+        create_with_max_concurrent_tasks: bool = True
 
     # 文件设置 | File settings
     class FileSettings:

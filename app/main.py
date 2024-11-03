@@ -65,17 +65,6 @@ async def lifespan(application: FastAPI):
     :param application: FastAPI 应用实例 | FastAPI application instance
     :return: None
     """
-    # 检查是否使用了 'faster_whisper' 引擎，并且 'MAX_CONCURRENT_TASKS' 设置大于 1
-    # 如果是，则强制将 'MAX_CONCURRENT_TASKS' 设置为 1，这将有助于避免性能问题
-    # Check if 'faster_whisper' engine is used and 'MAX_CONCURRENT_TASKS' setting is greater than 1
-    # If so, force 'MAX_CONCURRENT_TASKS' to 1, this will help to avoid performance issues
-    if Settings.AsyncModelPoolSettings.engine == "faster_whisper" and Settings.WhisperServiceSettings.MAX_CONCURRENT_TASKS > 1:
-        logger.warning(f"""
-            Detected 'faster_whisper' engine with 'MAX_CONCURRENT_TASKS' had been set to {Settings.WhisperServiceSettings.MAX_CONCURRENT_TASKS}.
-            Will force 'MAX_CONCURRENT_TASKS' to 1 for 'faster_whisper' engine, this will help to avoid performance issues.
-            """)
-        Settings.WhisperServiceSettings.MAX_CONCURRENT_TASKS = 1
-
     # 初始化数据库 | Initialize the database
     db_manager = DatabaseManager()
     await db_manager.initialize(Settings.DatabaseSettings.url)
@@ -85,8 +74,9 @@ async def lifespan(application: FastAPI):
         # 模型池设置 | Model Pool Settings
         engine=Settings.AsyncModelPoolSettings.engine,
         min_size=Settings.AsyncModelPoolSettings.min_size,
-        max_size=Settings.AsyncModelPoolSettings.get_max_size(),
-        create_with_max_concurrent_tasks=Settings.AsyncModelPoolSettings.create_with_max_concurrent_tasks(),
+        max_size=Settings.AsyncModelPoolSettings.max_size,
+        max_concurrent_tasks_per_gpu=Settings.AsyncModelPoolSettings.max_concurrent_tasks_per_gpu,
+        create_with_max_concurrent_tasks=Settings.AsyncModelPoolSettings.create_with_max_concurrent_tasks,
 
         # openai_whisper 引擎设置 | openai_whisper Engine Settings
         openai_whisper_model_name=Settings.OpenAIWhisperSettings.openai_whisper_model_name,

@@ -76,7 +76,7 @@ class WhisperService:
         self.db_manager = db_manager
 
         # 最大并发任务数 | Maximum concurrent tasks
-        self.max_concurrent_tasks = max_concurrent_tasks
+        self.max_concurrent_tasks = self.get_optimal_max_concurrent_tasks(max_concurrent_tasks)
 
         # 任务状态检查间隔 | Task status check interval
         self.task_status_check_interval = task_status_check_interval
@@ -117,6 +117,27 @@ class WhisperService:
         :return: None
         """
         self.task_processor.stop()
+
+    def get_optimal_max_concurrent_tasks(self, max_concurrent_tasks: int) -> int:
+        """
+        根据模型池可用实例数量返回最优的 max_concurrent_tasks。
+        Returns the optimal max_concurrent_tasks based on the number of available model pool instances.
+        """
+        # 检查用户输入是否为有效的正整数 | Validate user input
+        if max_concurrent_tasks < 1:
+            self.logger.warning("Invalid `max_concurrent_tasks` provided. Setting to 1 to avoid issues.")
+            max_concurrent_tasks = 1
+
+        pool_size = self.model_pool.pool.maxsize
+        if max_concurrent_tasks > pool_size:
+            self.logger.warning(
+                f"""
+                Detected `MAX_CONCURRENT_TASKS` had been set to {max_concurrent_tasks}, but the model pool size is only {pool_size}.
+                Optimal MWhisper Service `max_concurrent_tasks` attribute from user input: {max_concurrent_tasks} -> {pool_size}.
+                """)
+            return pool_size
+
+        return max_concurrent_tasks
 
     async def extract_audio_from_video(
             self,
