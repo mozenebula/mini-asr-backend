@@ -81,13 +81,13 @@ class AsyncModelPool:
                  # 模型池设置 | Model Pool Settings
                  min_size: int = 1,
                  max_size: int = 1,
-                 max_concurrent_tasks_per_gpu: int = 1,
-                 create_with_max_concurrent_tasks: bool = True,
+                 max_instances_per_gpu: int = 1,
+                 init_with_max_pool_size: bool = True,
                  ):
         """
-        初始化异步模型池
+        异步模型池，用于管理多个异步模型实例，并且会根据当前系统的 GPU 数量和 CPU 性能自动纠正错误的初始化参数，这个类是线程安全的。
 
-        Initialize the asynchronous model pool.
+        Asynchronous model pool, used to manage multiple asynchronous model instances, and will automatically correct based on the number of GPUs and CPU performance of the current system, the incorrectly initialized parameters. This class is thread-safe.
 
         :param engine: 引擎名称，目前支持 "openai_whisper", "faster_whisper" | Engine name, currently supports "openai_whisper", "faster_whisper"
 
@@ -104,11 +104,12 @@ class AsyncModelPool:
         :param faster_whisper_num_workers: 模型worker数 | Model worker count
         :param faster_whisper_download_root: 模型下载根目录 | Model download root directory
 
-        :param create_with_max_concurrent_tasks: 是否在模型池初始化时以最大并发任务数创建模型实例 |
-                                                Whether to create model instances with the maximum number of concurrent tasks
-                                                when the model pool is initialized
         :param min_size: 模型池的最小大小 | Minimum pool size
         :param max_size: 模型池的最大大小 | Maximum pool size
+        :param max_instances_per_gpu: 每个 GPU 最多支持的实例数量 | The maximum number of instances supported by each GPU
+        :param init_with_max_pool_size: 是否在模型池初始化时以最大并发任务数创建模型实例 |
+                                                Whether to create model instances with the maximum number of concurrent tasks
+                                                when the model pool is initialized
         """
 
         # 防止重复初始化 | Prevent re-initialization
@@ -143,8 +144,8 @@ class AsyncModelPool:
 
         self.min_size = min_size
         self.max_size = self.get_optimal_max_size(max_size)
-        self.max_concurrent_tasks_per_gpu = max_concurrent_tasks_per_gpu
-        self.create_with_max_concurrent_tasks = create_with_max_concurrent_tasks
+        self.max_instances_per_gpu = max_instances_per_gpu
+        self.init_with_max_pool_size = init_with_max_pool_size
         self.pool = Queue(maxsize=self.max_size)
         self.current_size = 0
         self.size_lock = asyncio.Lock()
@@ -197,6 +198,7 @@ class AsyncModelPool:
         # 输出日志信息 | Log the allocation details
         self.logger.info(f"""
         Allocating device for model instance {instance_index}:
+        Instance index  : {instance_index}
         Model type      : {model_type}
         Device type     : {device_type}
         Total GPUs      : {self.num_gpus}
@@ -240,14 +242,13 @@ class AsyncModelPool:
             self.logger.info("Single GPU detected. Limiting max_size to 1 to avoid GPU resource contention.")
         else:
             # 多 GPU 系统 | Multi-GPU system
-            max_instances_per_gpu = 2  # 假设每个 GPU 最多支持两个实例 | Assume max two instances per GPU
-            max_possible_instances = num_gpus * max_instances_per_gpu
+            max_possible_instances = num_gpus * self.max_instances_per_gpu
             optimal_size = min(max_size, max_possible_instances)
 
             self.logger.info(f"Multiple GPUs detected ({num_gpus}). Setting max_size to {optimal_size}, "
-                             f"based on max {max_instances_per_gpu} instances per GPU.")
+                             f"based on max {self.max_instances_per_gpu} instances per GPU.")
 
-        self.logger.info(f"Optimal Model Pool `max_size` attribute from user input: {max_size} -> {optimal_size}")
+        self.logger.info(f"Optimized Model Pool `max_size` attribute from user input: {max_size} -> {optimal_size}")
         return optimal_size
 
     async def initialize_pool(self) -> None:
@@ -257,16 +258,24 @@ class AsyncModelPool:
         Initialize the model pool asynchronously by loading the minimum number of model instances in batches
         to reduce concurrent download conflicts.
         """
-        instances_to_create = self.max_size if self.create_with_max_concurrent_tasks else self.min_size
+        instances_to_create = self.max_size if self.init_with_max_pool_size else self.min_size
         # 每批加载的实例数，用于减少并发冲突 | Number of instances to load per batch to reduce concurrent conflicts
         batch_size = 1
 
-        self.logger.info(f"Initializing AsyncModelPool with {instances_to_create} instances...")
+        self.logger.info(f"""
+        Initializing AsyncModelPool with total {instances_to_create} instances...
+        Engine           : {self.engine}
+        Min pool size    : {self.min_size}
+        Max pool size    : {self.max_size}
+        Max instances/GPU: {self.max_instances_per_gpu}
+        Init with max size: {self.init_with_max_pool_size}
+        This may take some time, please wait...
+        """)
 
         try:
             async with self.loading_lock:
                 if self.current_size >= self.min_size:
-                    self.logger.info("AsyncModelPool is already initialized.")
+                    self.logger.info("AsyncModelPool is already initialized. Skipping initialization...")
                     return
 
                 # 分批加载模型实例 | Load model instances in batches
@@ -279,7 +288,9 @@ class AsyncModelPool:
                     await asyncio.gather(*tasks)
                     self.logger.info(f"Batch of {batch_size} model instance(s) created.")
 
-                self.logger.info(f"Successfully initialized AsyncModelPool with {instances_to_create} instances.")
+                self.logger.info(f"""
+                Successfully initialized AsyncModelPool with {instances_to_create} instances.
+                """)
 
         except Exception as e:
             self.logger.error(f"Failed to initialize AsyncModelPool: {e}")
@@ -501,12 +512,13 @@ class AsyncModelPool:
             del model
 
             # 获取设备分配信息 | Get device allocation info
-            device_allocation = self.allocate_device(self.current_size, self.fast_whisper_device, self.engine)
+            device_allocation = self.allocate_device(self.current_size - 1, self.fast_whisper_device, self.engine)
 
             # 如果使用 GPU 则清理 CUDA 缓存 | Clear CUDA cache if using GPU
             if device_allocation["device"].startswith("cuda"):
                 torch.cuda.empty_cache()
-                self.logger.info("CUDA cache cleared after model destruction.")
+                self.logger.info(
+                    f"CUDA cache cleared for device {device_allocation['device']} after model destruction.")
 
             # 执行垃圾回收 | Perform garbage collection on any device
             gc.collect()
@@ -519,6 +531,7 @@ class AsyncModelPool:
                 Model instance destroyed successfully.
                 Updated pool size: {self.current_size}
                 Minimum pool size: {self.min_size}
+                Maximum pool size: {self.max_size}
                 """)
 
         except Exception as e:
@@ -546,10 +559,12 @@ class AsyncModelPool:
                 if self.current_size < self.min_size:
                     # 增加模型实例 | Increase model instances to meet new min size
                     add_count = self.min_size - self.current_size
-                    tasks = [self._create_and_put_model() for _ in range(add_count)]
+                    tasks = [self._create_and_put_model(i) for i in
+                             range(self.current_size, self.current_size + add_count)]
                     await asyncio.gather(*tasks)
+                    self.current_size += add_count
                     self.logger.info(f"""
-                    Resized pool: Created {add_count} new model instances.
+                    Resized pool: Created {add_count} new model instance(s).
                     Current pool size: {self.current_size}
                     Minimum pool size: {self.min_size}
                     Maximum pool size: {self.max_size}
@@ -563,8 +578,9 @@ class AsyncModelPool:
                             model = await self.pool.get()
                             tasks.append(self._destroy_model(model))
                     await asyncio.gather(*tasks)
+                    self.current_size -= remove_count
                     self.logger.info(f"""
-                    Resized pool: Removed {remove_count} excess model instances.
+                    Resized pool: Removed {remove_count} excess model instance(s).
                     Current pool size: {self.current_size}
                     Minimum pool size: {self.min_size}
                     Maximum pool size: {self.max_size}

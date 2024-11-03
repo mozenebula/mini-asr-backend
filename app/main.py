@@ -75,8 +75,8 @@ async def lifespan(application: FastAPI):
         engine=Settings.AsyncModelPoolSettings.engine,
         min_size=Settings.AsyncModelPoolSettings.min_size,
         max_size=Settings.AsyncModelPoolSettings.max_size,
-        max_concurrent_tasks_per_gpu=Settings.AsyncModelPoolSettings.max_concurrent_tasks_per_gpu,
-        create_with_max_concurrent_tasks=Settings.AsyncModelPoolSettings.create_with_max_concurrent_tasks,
+        max_instances_per_gpu=Settings.AsyncModelPoolSettings.max_instances_per_gpu,
+        init_with_max_pool_size=Settings.AsyncModelPoolSettings.init_with_max_pool_size,
 
         # openai_whisper 引擎设置 | openai_whisper Engine Settings
         openai_whisper_model_name=Settings.OpenAIWhisperSettings.openai_whisper_model_name,

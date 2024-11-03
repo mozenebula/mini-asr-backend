@@ -107,10 +107,10 @@ class Settings:
         max_size: int = 1
 
         # 每个 GPU 最多支持的实例数量，如果你的 GPU 内存足够大，可以设置大于 1 | The maximum number of instances supported by each GPU, if your GPU memory is large enough, you can set it to more than 1
-        max_concurrent_tasks_per_gpu: int = 1
+        max_instances_per_gpu: int = 1
 
         # 是否在模型池初始化时以最大的模型池大小创建模型实例 | Whether to create model instances with the maximum model pool size when the model pool is initialized
-        create_with_max_concurrent_tasks: bool = True
+        init_with_max_pool_size: bool = True
 
     # 文件设置 | File settings
     class FileSettings:
