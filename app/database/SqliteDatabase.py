@@ -30,20 +30,20 @@
 # ==============================================================================
 import datetime
 import traceback
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, case
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Optional, List, Dict, Union
 from contextlib import asynccontextmanager
-from app.database.models import Task, Base, QueryTasksOptionalFilter
+from app.database.models import Task, Base, QueryTasksOptionalFilter, TaskStatus, TaskPriority
 from app.utils.logging_utils import configure_logging
 
 # 配置日志记录器 | Configure logger
 logger = configure_logging(name=__name__)
 
 
-class DatabaseManager:
+class SqliteDatabaseManager:
     _engine = None
     _session_factory = None
 
@@ -115,6 +115,36 @@ class DatabaseManager:
                 logger.error(f"Error fetching task by ID {task_id}: {e}")
                 logger.error(traceback.format_exc())
                 return None
+
+    async def get_queued_tasks(self, max_concurrent_tasks: int) -> List[Task]:
+        """
+        异步获取队列中的任务
+
+        Asynchronously get a task from the queue
+
+        :param max_concurrent_tasks: 最大并发任务数 | Maximum number of concurrent tasks
+        :return: 任务信息 | Task details
+        """
+        async with self._session_factory() as session:
+            try:
+                result = await session.execute(
+                    select(Task)
+                    .where(Task.status == TaskStatus.QUEUED)
+                    .order_by(
+                        case(
+                            (Task.priority == TaskPriority.HIGH, 1),
+                            (Task.priority == TaskPriority.NORMAL, 2),
+                            (Task.priority == TaskPriority.LOW, 3),
+                        )
+                    )
+                    .limit(max_concurrent_tasks)
+                )
+                remaining_tasks = result.scalars().all()
+                return remaining_tasks
+            except SQLAlchemyError as e:
+                logger.error(f"Error fetching queued task: {e}")
+                logger.error(traceback.format_exc())
+                raise
 
     async def add_task(self, task: Task) -> None:
         """

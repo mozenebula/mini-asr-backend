@@ -34,6 +34,8 @@ from typing import Union, List, Optional
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request, APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks, Query, status, Body
 from fastapi.responses import FileResponse
+
+from app.database.MySQLDatabase import MySQLDatabaseManager
 from app.utils.logging_utils import configure_logging
 from app.api.models.APIResponseModel import ResponseModel, ErrorResponseModel
 from app.database.models import (
@@ -48,6 +50,9 @@ router = APIRouter()
 
 # 配置日志记录器
 logger = configure_logging(name=__name__)
+
+
+# db_manager = MySQLDatabaseManager(Settings.DatabaseSettings.mysql_url)
 
 
 # 创建任务 | Create task

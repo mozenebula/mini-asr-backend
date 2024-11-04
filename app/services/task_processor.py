@@ -35,12 +35,16 @@ import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional, Any, Iterable
+from contextlib import asynccontextmanager
+from typing import List, Any, Iterable, Union
 
-from sqlalchemy import select, case
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+
 from app.services.callback_service import CallbackService
-from app.database.database import DatabaseManager
-from app.database.models import Task, TaskStatus, TaskPriority
+from app.database.SqliteDatabase import SqliteDatabaseManager
+from app.database.MySQLDatabase import MySQLDatabaseManager
+from app.database.models import Task, TaskStatus
 from app.model_pool.async_model_pool import AsyncModelPool
 from app.utils.file_utils import FileUtils
 from app.utils.logging_utils import configure_logging
@@ -60,7 +64,7 @@ class TaskProcessor:
     def __init__(self,
                  model_pool: AsyncModelPool,
                  file_utils: FileUtils,
-                 db_manager: DatabaseManager,
+                 db_manager: Union[SqliteDatabaseManager, MySQLDatabaseManager],
                  max_concurrent_tasks: int,
                  task_status_check_interval: int
                  ) -> None:
@@ -82,10 +86,29 @@ class TaskProcessor:
         self.thread: threading.Thread = threading.Thread(target=self.run_loop)
         self.logger = configure_logging(name=__name__)
         self.shutdown_event: threading.Event = threading.Event()
-        self.db_manager: DatabaseManager = db_manager
+        self.db_manager: Union[SqliteDatabaseManager, MySQLDatabaseManager] = db_manager
         self.callback_service: CallbackService = CallbackService()
         self.max_concurrent_tasks: int = max_concurrent_tasks
         self.task_status_check_interval: int = task_status_check_interval
+
+        # # 使用独立的数据库管理器防止异步事件冲突 | Use a separate database manager to prevent asynchronous event conflicts
+        # self.db_type = Settings.DatabaseSettings.db_type
+        # self.db_url = Settings.DatabaseSettings.sqlite_url if self.db_type == "sqlite" else Settings.DatabaseSettings.mysql_url
+        # self.db_engine = create_async_engine(
+        #         self.db_url,
+        #         echo=False,
+        #         pool_pre_ping=True,
+        #         future=True
+        #     )
+        # self.db_session = sessionmaker(
+        #         bind=self.db_engine,
+        #         expire_on_commit=False,
+        #         class_=AsyncSession
+        #     )
+        # self.db_manager: Union[SqliteDatabaseManager, MySQLDatabaseManager] = db_manager
+        # # 将数据库管理器的引擎和会话工厂设置为当前实例的引擎和会话工厂 | Set the engine and session factory of the database manager to the engine and session factory of the current instance
+        # # self.db_manager._engine = self.db_engine
+        # # self.db_manager._session_factory = self.db_session
 
     def start(self) -> None:
         """
@@ -135,6 +158,11 @@ class TaskProcessor:
         self.loop.close()
         self.logger.info("TaskProcessor Event loop closed.")
 
+    # @asynccontextmanager
+    # async def get_session(self):
+    #     async with self.db_session() as session:
+    #         yield session
+
     async def process_tasks(self) -> None:
         """
         持续从数据库中按优先级拉取任务并处理。若无任务，则等待并重试。
@@ -173,21 +201,8 @@ class TaskProcessor:
 
         :return: 按优先级排序的任务列表 | List of tasks sorted by priority
         """
-        async with self.db_manager.get_session() as session:
-            result = await session.execute(
-                select(Task)
-                .where(Task.status == TaskStatus.QUEUED)
-                .order_by(
-                    case(
-                        (Task.priority == TaskPriority.HIGH, 1),
-                        (Task.priority == TaskPriority.NORMAL, 2),
-                        (Task.priority == TaskPriority.LOW, 3),
-                    )
-                )
-                .limit(self.max_concurrent_tasks)
-            )
-            remaining_tasks = result.scalars().all()
-            return remaining_tasks
+        remaining_tasks = await self.db_manager.get_queued_tasks(self.max_concurrent_tasks)
+        return remaining_tasks
 
     async def _process_multiple_tasks(self, tasks: List[Task]) -> None:
         """
@@ -260,9 +275,9 @@ class TaskProcessor:
 
             try:
                 # 记录任务开始时间 | Record task start time
-                task_start_time: datetime.datetime = datetime.datetime.utcnow()
+                task_start_time: datetime.datetime = datetime.datetime.now()
 
-                # 更新任务状态和结果 | Update task status and result
+                # 更新任务状态为 PROCESSING | Update task status to PROCESSING
                 task_update = {
                     "status": TaskStatus.PROCESSING
                 }
@@ -298,7 +313,7 @@ class TaskProcessor:
                 }
 
                 # 记录任务结束时间 | Record task end time
-                task_end_time: datetime.datetime = datetime.datetime.utcnow()
+                task_end_time: datetime.datetime = datetime.datetime.now()
                 task_processing_time = (task_end_time - task_start_time).total_seconds()
 
                 self.logger.info(
@@ -339,7 +354,7 @@ class TaskProcessor:
             asyncio.run(self.db_manager.update_task(task.id, **task_update))
             self.logger.error(
                 f"""
-                Error processing tasks: 
+                Error processing task: 
                 ID          : {task.id}
                 Engine      : {task.engine_name}
                 Priority    : {task.priority}

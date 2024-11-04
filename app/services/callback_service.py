@@ -31,8 +31,9 @@
 
 import traceback
 import datetime
-from typing import Optional, Dict
-from app.database.database import DatabaseManager
+from typing import Optional, Dict, Union
+from app.database.SqliteDatabase import SqliteDatabaseManager
+from app.database.MySQLDatabase import MySQLDatabaseManager
 from app.http_client.AsyncHttpClient import BaseAsyncHttpClient
 from app.utils.logging_utils import configure_logging
 from app.database.models import Task
@@ -48,7 +49,7 @@ class CallbackService:
 
     async def task_callback_notification(self,
                                          task: Task,
-                                         db_manager: DatabaseManager,
+                                         db_manager: Union[SqliteDatabaseManager, MySQLDatabaseManager],
                                          proxy_settings: Optional[Dict[str, str]] = None,
                                          method: str = "POST",
                                          headers: Optional[dict] = None) -> None:
@@ -88,8 +89,8 @@ class CallbackService:
                 await db_manager.update_task_callback_status(
                     task_id=task.id,
                     callback_status_code=response.status_code,
-                    callback_message=response.text[:255] if response else None,
-                    callback_time=datetime.datetime.utcnow()
+                    callback_message=response.text[:512] if response else None,
+                    callback_time=datetime.datetime.now()
                 )
 
         except Exception as e:

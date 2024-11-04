@@ -35,13 +35,14 @@ import traceback
 import uuid
 from typing import Optional, Union
 from concurrent.futures import ThreadPoolExecutor
-from fastapi import Request, UploadFile, HTTPException, BackgroundTasks
+from fastapi import Request, UploadFile, BackgroundTasks
 from fastapi.responses import FileResponse
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from pydub import AudioSegment
 
 from app.model_pool.async_model_pool import AsyncModelPool
-from app.database.database import DatabaseManager
+from app.database.SqliteDatabase import SqliteDatabaseManager
+from app.database.MySQLDatabase import MySQLDatabaseManager
 from app.database.models import Task
 from app.services.task_processor import TaskProcessor
 from app.utils.file_utils import FileUtils
@@ -61,7 +62,7 @@ class WhisperService:
 
     def __init__(self,
                  model_pool: AsyncModelPool,
-                 db_manager: DatabaseManager,
+                 db_manager: Union[SqliteDatabaseManager, MySQLDatabaseManager],
                  max_concurrent_tasks: int,
                  task_status_check_interval: int
                  ) -> None:

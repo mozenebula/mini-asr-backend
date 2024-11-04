@@ -36,7 +36,7 @@ class Settings:
     # FastAPI 设置 | FastAPI settings
     class FastAPISettings:
         # 项目名称 | Project name
-        title: str = "Whisper Speech to Text API"
+        title: str = "Fast-Powerful-Whisper-AI-Services-API"
         # 项目描述 | Project description
         description: str = "An open source speech-to-text API that runs completely locally. The project is based on the OpenAI Whisper model and the faster inference Faster Whisper model, and implements an asynchronous model pool, using the asynchronous features of FastAPI for efficient packaging, supporting thread-safe asynchronous task queues, asynchronous file IO, asynchronous database IO, asynchronous web crawler modules, and more custom features."
         # 项目版本 | Project version
@@ -54,8 +54,32 @@ class Settings:
 
     # 数据库设置 | Database settings
     class DatabaseSettings:
+        # 选择数据库类型，支持 "sqlite" 和 "mysql" | Select the database type, support "sqlite" and "mysql"
+        # "sqlite"：适合小规模项目单机运行，无需安装数据库，直接使用文件存储数据 | "sqlite": Suitable for small-scale projects running on a single machine, no need to install a database, directly use file storage data
+        # "mysql"：适合大规模项目分布式部署，需要安装 MySQL 数据库 | "mysql": Suitable for large-scale projects distributed deployment, need to install MySQL database
+        # 如果你选择 "mysql"，请确保安装了 aiomysql | If you choose "mysql", please make sure aiomysql is installed
+        # 如果你选择 "sqlite"，请确保安装了 aiosqlite | If you choose "sqlite", please make sure aiosqlite is installed
+        db_type: str = "sqlite"
+
+        # SQLite 数据库设置 | SQLite database settings
+        # 数据库名字 | Database name
+        sqlite_db_name: str = "whisperserviceapi.db"
         # 数据库 URL | Database URL
-        url: str = "sqlite+aiosqlite:///tasks.db"
+        sqlite_url: str = f"sqlite+aiosqlite:///{sqlite_db_name}"
+
+        # MySQL 数据库设置 | MySQL database settings
+        # 数据库名字 | Database name
+        mysql_db_name: str = "whisperserviceapi"
+        # 数据库用户名 | Database username
+        mysql_username: str = "WhisperServiceAPI"
+        # 数据库密码 | Database password
+        mysql_password: str = "pJcjNhDefWPcXndW"
+        # 数据库地址 | Database host
+        mysql_host: str = ""
+        # 数据库端口 | Database port
+        mysql_port: int = 3306
+        # 数据库 URL | Database URL
+        mysql_url: str = f"mysql+aiomysql://{mysql_username}:{mysql_password}@{mysql_host}:{mysql_port}/{mysql_db_name}"
 
     # Whisper 服务类设置 | Whisper service class settings
     class WhisperServiceSettings:
