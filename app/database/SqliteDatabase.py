@@ -28,6 +28,7 @@
 #              )  |  \  `.___________|/    Whisper API Out of the Box (Where is my ⭐?)
 #              `--'   `--'
 # ==============================================================================
+
 import datetime
 import traceback
 from sqlalchemy import select, and_, func, case
