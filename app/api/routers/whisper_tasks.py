@@ -52,9 +52,6 @@ router = APIRouter()
 logger = configure_logging(name=__name__)
 
 
-# db_manager = MySQLDatabaseManager(Settings.DatabaseSettings.mysql_url)
-
-
 # 创建任务 | Create task
 @router.post(
     "/tasks/create",
