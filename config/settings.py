@@ -60,6 +60,7 @@ class Settings:
     # Whisper 服务类设置 | Whisper service class settings
     class WhisperServiceSettings:
         # Whisper 服务的最大并发任务数，设置为 1 时为单任务模式 | The maximum number of concurrent tasks for the Whisper service, set to 1 for single task mode
+        # 如果你有多个 GPU，可以设置大于 1，在单一 GPU 上运行多个任务无法缩短任务时间，但可以提高任务并发度 | If you have multiple GPUs, you can set it to more than 1. Running multiple tasks on a single GPU cannot shorten the task time, but can increase the task concurrency
         MAX_CONCURRENT_TASKS: int = 1
         # 检查任务状态的时间间隔（秒），如果设置过小可能会导致数据库查询频繁，设置过大可能会导致任务状态更新不及时。
         # Time interval for checking task status (seconds). If set too small, it may cause frequent database queries.

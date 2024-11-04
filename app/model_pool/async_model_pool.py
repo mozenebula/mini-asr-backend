@@ -170,43 +170,51 @@ class AsyncModelPool:
         elif model_type == "openai_whisper" and device_type is None:
             device_type = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # 默认分配为 CPU，compute_type 设置为 float32 | Default to CPU with compute_type set to float32
-        allocation = {"device": "cpu", "compute_type": "float32"}
+        # 默认设备分配 | Default device allocation
+        allocation = {"device": "N/A", "compute_type": "N/A"}
 
         if device_type == "cuda" and self.num_gpus > 0:
             if self.num_gpus == 1:
                 # 单 GPU 情况，分配到 GPU 0 并使用 float16 | Single GPU case, assign to GPU 0 with float16
                 allocation["device"] = "cuda"
                 allocation["device_index"] = 0 if model_type == "faster_whisper" else None
-                allocation["compute_type"] = "float16"
+                allocation["compute_type"] = self.fast_whisper_compute_type if model_type == "faster_whisper" else "N/A"
             else:
-                # 多 GPU 情况下轮询分配 | Round-robin allocation for multiple GPUs
-                device_index = instance_index % self.num_gpus
-                allocation["device"] = "cuda" if model_type == "faster_whisper" else f"cuda:{device_index}"
-                allocation["device_index"] = device_index if model_type == "faster_whisper" else None
-                allocation["compute_type"] = "float16"
+                # 多 GPU 情况下考虑 max_instances_per_gpu 限制 | Consider max_instances_per_gpu in multi-GPU setup
+                total_instances_per_gpu = self.max_instances_per_gpu
+                gpu_index = (instance_index // total_instances_per_gpu) % self.num_gpus
+                allocation["device"] = "cuda" if model_type == "faster_whisper" else f"cuda:{gpu_index}"
+                allocation["device_index"] = gpu_index if model_type == "faster_whisper" else None
+                allocation["compute_type"] = self.fast_whisper_compute_type if model_type == "faster_whisper" else "N/A"
+        else:
+            # 无 GPU 情况，分配到 CPU 并使用 float32 | No GPU case, assign to CPU with float32
+            allocation["device"] = "cpu"
+            allocation["compute_type"] = "float32" if model_type == "faster_whisper" else "N/A"
 
         # 构建日志信息，包含系统上下文信息 | Build log information, including system context
         gpu_message = (
             "(Single GPU system detected, assigned to GPU 0)"
             if self.num_gpus == 1 else
-            "(Multi-GPU system detected, assigned using round-robin)"
+            "(Multi-GPU system detected, assigned using max_instances_per_gpu limit)"
             if self.num_gpus > 1 else
+            "(No GPU available, falling back to CPU)"
+            if allocation["device"] == "cpu" else
             "(No GPU available or CPU explicitly specified)"
         )
 
         # 输出日志信息 | Log the allocation details
         self.logger.info(f"""
         Allocating device for model instance {instance_index}:
-        Instance index  : {instance_index}
-        Model type      : {model_type}
-        Device type     : {device_type}
-        Total GPUs      : {self.num_gpus}
-        Total CPU Threads: {torch.get_num_threads()}
-        Max Instances   : {self.max_size}
-        Selected device : {allocation["device"]}
-        Compute type    : {allocation["compute_type"]}
-        Device index    : {allocation.get("device_index", "N/A")}
+        Instance index      : {instance_index}
+        Model type          : {model_type}
+        Device type         : {device_type}
+        Total GPUs          : {self.num_gpus}
+        Total CPU Threads   : {torch.get_num_threads()}
+        Max Instances       : {self.max_size}
+        Max Instances/GPU   : {self.max_instances_per_gpu}
+        Selected device     : {allocation["device"]}
+        Compute type        : {allocation["compute_type"]}
+        Device index        : {allocation.get("device_index", "N/A")}
         {gpu_message}
         """)
 
@@ -304,7 +312,8 @@ class AsyncModelPool:
         """
         try:
             # 使用 allocate_device 分配设备和配置 | Use allocate_device to assign device and configuration
-            device_allocation = self.allocate_device(instance_index, self.fast_whisper_device, self.engine)
+            device_type = self.fast_whisper_device if self.engine == "faster_whisper" else self.openai_whisper_device
+            device_allocation = self.allocate_device(instance_index, device_type, self.engine)
 
             # 输出配置信息日志 | Log configuration information
             self.logger.info(f"""
@@ -356,15 +365,15 @@ class AsyncModelPool:
             time_taken = (end_time - start_time).total_seconds()
 
             self.logger.info(f"""
-                            Successfully created and added a new model instance to the pool.
-                            Engine           : {self.engine}
-                            Device           : {device_allocation['device']}
-                            Compute type     : {device_allocation['compute_type']}
-                            Device index     : {device_allocation.get('device_index', 'N/A')}
-                            Instance index   : {instance_index}
-                            Model load time  : {time_taken:.2f} seconds
-                            Current pool size: {self.current_size}
-                            """)
+                                        Successfully created and added a new model instance to the pool.
+                                        Engine           : {self.engine}
+                                        Device           : {device_allocation['device']}
+                                        Compute type     : {device_allocation['compute_type']}
+                                        Device index     : {device_allocation.get('device_index', 'N/A')}
+                                        Instance index   : {instance_index}
+                                        Model load time  : {time_taken:.2f} seconds
+                                        Current pool size: {self.current_size}
+                                        """)
 
         except Exception as e:
             self.logger.error(f"Failed to create and add model instance to the pool: {e}")
@@ -402,21 +411,19 @@ class AsyncModelPool:
                         if self.current_size < self.max_size:
                             instance_index = self.current_size
                             await self._create_and_put_model(instance_index)
-                            self.current_size += 1
                             self.logger.info(f"Pool exhausted. Created new model instance with index {instance_index}.")
                             model = await self.pool.get()  # 获取刚创建的模型 | Retrieve the newly created model
                             return model
                     self.logger.error("All model instances are in use, and the pool is exhausted.")
                     raise RuntimeError("Model pool exhausted, and all instances are currently in use.")
 
-            elif strategy == "dynamic" and self.current_size < self.max_size:
+            elif strategy == "dynamic":
                 # 在池大小允许的情况下动态创建新模型 | Dynamically create a new model if pool size allows
                 async with self.resize_lock:
                     async with self.size_lock:
                         if self.current_size < self.max_size:
                             instance_index = self.current_size
                             await self._create_and_put_model(instance_index)
-                            self.current_size += 1
                             self.logger.info(
                                 f"Dynamic creation: New model instance created with index {instance_index}.")
                 model = await asyncio.wait_for(self.pool.get(), timeout=timeout)
@@ -438,6 +445,26 @@ class AsyncModelPool:
             self.logger.error(f"Failed to retrieve a model instance from the pool: {e}")
             self.logger.debug(traceback.format_exc())
             raise RuntimeError("Unexpected error occurred while retrieving a model instance.")
+
+    async def acquire_model(self):
+        """
+        考虑模型的并发使用，这个方法会获取一个模型实例，但是无需将其从池中取出，允许并发使用，仅适用于线程安全的模型。
+
+        Consider concurrent usage of the model, this method will acquire a model instance without removing it from the pool, allowing concurrent usage, only applicable for thread-safe models.
+        """
+        try:
+            if self.pool.empty():
+                self.logger.error("Model pool is empty. Unable to acquire model instance.")
+                raise RuntimeError("Model pool is empty.")
+            # 获取模型实例，但不从池中移除 | Get a model instance without removing it from the pool
+            model = await self.pool.get()
+            await self.pool.put(model)  # 立即放回池中 | Immediately put it back into the pool
+            self.logger.info("Model instance acquired for concurrent usage.")
+            return model
+        except Exception as e:
+            self.logger.error(f"Failed to acquire model instance: {e}")
+            self.logger.debug(traceback.format_exc())
+            raise RuntimeError("Unexpected error occurred while acquiring a model instance.")
 
     async def return_model(self, model) -> None:
         """
@@ -516,9 +543,13 @@ class AsyncModelPool:
 
             # 如果使用 GPU 则清理 CUDA 缓存 | Clear CUDA cache if using GPU
             if device_allocation["device"].startswith("cuda"):
-                torch.cuda.empty_cache()
-                self.logger.info(
-                    f"CUDA cache cleared for device {device_allocation['device']} after model destruction.")
+                # 如果是单 GPU 系统，则清理整个 CUDA 缓存 | If it's a single GPU system, clear the entire CUDA cache
+                if self.num_gpus == 1:
+                    torch.cuda.empty_cache()
+                    self.logger.info(f"CUDA cache cleared for device {device_allocation['device']} after model destruction.")
+                else:
+                    # 多 GPU 系统，则不进行清理，防止影响其他模型实例 | Multi-GPU system, do not clear to avoid affecting other model instances
+                    self.logger.info(f"Skipping CUDA cache cleanup for multi-GPU system after model destruction.")
 
             # 执行垃圾回收 | Perform garbage collection on any device
             gc.collect()
@@ -562,7 +593,6 @@ class AsyncModelPool:
                     tasks = [self._create_and_put_model(i) for i in
                              range(self.current_size, self.current_size + add_count)]
                     await asyncio.gather(*tasks)
-                    self.current_size += add_count
                     self.logger.info(f"""
                     Resized pool: Created {add_count} new model instance(s).
                     Current pool size: {self.current_size}
@@ -578,7 +608,6 @@ class AsyncModelPool:
                             model = await self.pool.get()
                             tasks.append(self._destroy_model(model))
                     await asyncio.gather(*tasks)
-                    self.current_size -= remove_count
                     self.logger.info(f"""
                     Resized pool: Removed {remove_count} excess model instance(s).
                     Current pool size: {self.current_size}
