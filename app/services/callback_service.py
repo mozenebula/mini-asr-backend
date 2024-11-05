@@ -77,7 +77,7 @@ class CallbackService:
                     proxy_settings=proxy_settings,
                     headers=headers,
                     request_timeout=request_timeout
-            ).aclient as client:
+            ) as client:
                 task_data = await db_manager.get_task(task.id)
                 logger.info(f"Sending task callback notification for task {task.id} to: {callback_url}")
 

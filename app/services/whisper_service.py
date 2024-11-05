@@ -40,7 +40,7 @@ from fastapi.responses import FileResponse
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from pydub import AudioSegment
 
-from app.model_pool.async_model_pool import AsyncModelPool
+from app.model_pool.AsyncModelPool import AsyncModelPool
 from app.database.DatabaseManager import DatabaseManager
 from app.database.models import Task
 from app.services.task_processor import TaskProcessor

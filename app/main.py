@@ -33,7 +33,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.api.router import router as api_router
 from app.database.DatabaseManager import DatabaseManager
-from app.model_pool.async_model_pool import AsyncModelPool
+from app.model_pool.AsyncModelPool import AsyncModelPool
 from app.services.whisper_service import WhisperService
 from app.utils.logging_utils import configure_logging
 from config.settings import Settings

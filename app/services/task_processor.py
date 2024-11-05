@@ -39,7 +39,7 @@ from typing import List, Any, Iterable, Optional
 
 from app.database.DatabaseManager import DatabaseManager
 from app.database.models import Task, TaskStatus
-from app.model_pool.async_model_pool import AsyncModelPool
+from app.model_pool.AsyncModelPool import AsyncModelPool
 from app.services.callback_service import CallbackService
 from app.utils.file_utils import FileUtils
 from app.utils.logging_utils import configure_logging
