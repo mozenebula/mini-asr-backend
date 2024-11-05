@@ -44,10 +44,15 @@ logger = configure_logging(__name__)
 class CallbackService:
     def __init__(self):
         self.default_headers = {
-            "User-Agent": "Fast-Powerful-Whisper-AI-Services-API/Callback (https://github.com/Evil0ctal/Fast-Powerful-Whisper-AI-Services-API)"
+            "User-Agent": "Fast-Powerful-Whisper-AI-Services-API/HTTP Callback (https://github.com/Evil0ctal/Fast-Powerful-Whisper-AI-Services-API)",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Cache-Control": "no-cache",
         }
 
-    # @retry(stop=stop_after_attempt(3), wait=wait_fixed(3))
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(3))
     async def task_callback_notification(self,
                                          task: Task,
                                          db_manager: DatabaseManager,
@@ -72,14 +77,15 @@ class CallbackService:
         callback_url = task.callback_url
         headers = headers or self.default_headers
         if callback_url:
-            # TODO: 客户端在某些情况下可能会被关闭，需要进一步处理 2024年11月5日01:42:23
+            logger.info(f"Sending task callback notification for task {task.id} to: {callback_url}")
             async with BaseAsyncHttpClient(
                     proxy_settings=proxy_settings,
                     headers=headers,
                     request_timeout=request_timeout
             ) as client:
+
+                # 获取任务数据 | Get task data
                 task_data = await db_manager.get_task(task.id)
-                logger.info(f"Sending task callback notification for task {task.id} to: {callback_url}")
 
                 response = await client.fetch_data(
                     url=callback_url,
@@ -88,12 +94,13 @@ class CallbackService:
                     json=task_data.to_dict()
                 )
 
-                if response:
-                    logger.info(
-                        f"Task callback notification sent successfully with response status: {response.status_code}")
-                else:
-                    logger.warning(
-                        f"Task callback notification sent, but received empty response for task {task.id}")
+                # 更新任务的回调状态码和消息 | Update the callback status code and message of the task
+                logger.info(f"Callback response status code for task {task.id}: {response.status_code}")
+                await db_manager.update_task_callback_status(
+                    task_id=task.id,
+                    callback_status_code=response.status_code,
+                    callback_message=response.text,
+                    callback_time=datetime.datetime.now()
+                )
         else:
             logger.info(f"No callback URL provided for task {task.id}, skipping callback notification.")
-

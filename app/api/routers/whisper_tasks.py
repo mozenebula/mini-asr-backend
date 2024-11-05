@@ -1171,7 +1171,7 @@ async def callback_test(
             }
         }
 
-        logger.info(f"Callback interface received data: {callback_data}")
+        logger.info(f"Callback interface received data: {str(callback_data)[:100]}")
 
         return ResponseModel(
             code=status.HTTP_200_OK,

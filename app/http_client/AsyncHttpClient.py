@@ -57,27 +57,6 @@ class BaseAsyncHttpClient:
     异步 HTTP 客户端 (Asynchronous HTTP client)
     """
 
-    # TODO: 客户端在某些情况下可能会被关闭，需要进一步处理 2024年11月5日01:42:23
-    _shared_client = None
-
-    @classmethod
-    def get_shared_client(cls, headers: Optional[dict] = None, proxies: Optional[dict] = None,
-                          **kwargs) -> httpx.AsyncClient:
-        """
-        获取共享的 HTTP 客户端池 (Get shared HTTP client pool)
-
-        :param headers: 请求头设置 | Request headers
-        :param proxies: 代理设置 | Proxy settings
-        :param kwargs: 其他客户端配置参数 | Other client configuration parameters
-        :return: 配置了请求头和代理的客户端实例 | Client instance with headers and proxies
-        """
-        """
-        获取单例 HTTP 客户端 (Get singleton HTTP client)
-        """
-        if cls._shared_client is None:
-            cls._shared_client = httpx.AsyncClient(headers=headers, proxies=proxies, **kwargs)
-        return cls._shared_client
-
     def __init__(self, proxy_settings: Optional[Dict[str, str]] = None, retry_limit: int = 3,
                  max_connections: int = 50, request_timeout: int = 10, max_concurrent_tasks: int = 50,
                  headers: Optional[Dict[str, str]] = None, base_backoff: float = 1.0):
@@ -96,17 +75,21 @@ class BaseAsyncHttpClient:
         """
         self.proxy_settings = proxy_settings if isinstance(proxy_settings, dict) else None
         self.headers = headers or {
-            "User-Agent": "Fast-Powerful-Whisper-AI-Services-API/HTTP Client (https://github.com/Evil0ctal/Fast-Powerful-Whisper-AI-Services-API)"
+            "User-Agent": "Fast-Powerful-Whisper-AI-Services-API/HTTP Client (https://github.com/Evil0ctal/Fast-Powerful-Whisper-AI-Services-API)",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Cache-Control": "no-cache",
         }
         self.max_concurrent_tasks = max_concurrent_tasks
         self.semaphore = asyncio.Semaphore(max_concurrent_tasks)
         self.retry_limit = retry_limit
         self.request_timeout = request_timeout
         self.base_backoff = base_backoff
-        self._is_closed = False
 
-        # Use shared client instance
-        self.aclient = self.get_shared_client(
+        # 创建独立的 AsyncClient 实例 (Create an independent AsyncClient instance)
+        self.aclient = httpx.AsyncClient(
             headers=self.headers,
             proxies=self.proxy_settings,
             timeout=httpx.Timeout(request_timeout),
@@ -250,11 +233,9 @@ class BaseAsyncHttpClient:
 
     async def close(self):
         """
-        关闭异步客户端，仅关闭一次 (Close asynchronous client, only once)
+        关闭异步客户端 (Close asynchronous client)
         """
-        if self._shared_client is not None:
-            await self._shared_client.aclose()
-            self._shared_client = None
+        await self.aclient.aclose()
 
     async def __aenter__(self):
         """
@@ -263,6 +244,9 @@ class BaseAsyncHttpClient:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """
+        异步上下文管理器出口 (Async context manager exit)
+        """
         await self.close()
 
 
@@ -274,10 +258,10 @@ if __name__ == "__main__":
         Demonstrates basic usage of BaseAsyncHttpClient, including GET, POST, and HEAD requests.
         """
         async with BaseAsyncHttpClient(
-            headers={"User-Agent": "Demo-Client/1.0"},
-            request_timeout=5,
-            max_connections=10,
-            retry_limit=2
+                headers={"User-Agent": "Demo-Client/1.0"},
+                request_timeout=5,
+                max_connections=10,
+                retry_limit=2
         ) as client:
             # 示例 GET 请求 (Example GET request)
             url_get = "https://jsonplaceholder.typicode.com/posts/1"

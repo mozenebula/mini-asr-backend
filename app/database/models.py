@@ -118,7 +118,7 @@ class Task(Base):
     task_processing_time = Column(Float, nullable=True)
 
     # 文件路径 | File path
-    file_path = Column(String(255), nullable=False)
+    file_path = Column(Text, nullable=False)
     # 文件名称 | File name
     file_name = Column(String(255), nullable=False)
     # 文件大小 | File size
