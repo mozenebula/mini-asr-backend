@@ -100,3 +100,8 @@ class APIRetryExhaustedError(APIError):
         super().__init__(message, status_code)
 
 
+class APIFileDownloadError(APIError):
+    """当下载文件时出现问题时抛出 (Raised when there is an issue downloading a file)"""
+
+    def __init__(self, message: str = "Failed to download the file.", status_code: int = None):
+        super().__init__(message, status_code)

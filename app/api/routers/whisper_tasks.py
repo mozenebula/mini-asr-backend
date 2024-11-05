@@ -34,6 +34,7 @@ from typing import Union, List, Optional
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request, APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks, Query, status, Body
 from fastapi.responses import FileResponse
+from urllib.parse import urlparse
 from app.utils.logging_utils import configure_logging
 from app.api.models.APIResponseModel import ResponseModel, ErrorResponseModel
 from app.database.models import (
@@ -59,8 +60,10 @@ logger = configure_logging(name=__name__)
 )
 async def task_create(
         request: Request,
-        file: UploadFile = File(...,
-                                description="媒体文件（支持的格式：音频和视频，如 MP3, WAV, MP4, MKV 等） / Media file (supported formats: audio and video, e.g., MP3, WAV, MP4, MKV)"),
+        file: Union[UploadFile, str] = File("",
+                                            description="媒体文件（支持的格式：音频和视频，如 MP3, WAV, MP4, MKV 等） / Media file (supported formats: audio and video, e.g., MP3, WAV, MP4, MKV)"),
+        file_url: Optional[str] = Form("",
+                                       description="媒体文件的 URL 地址 / URL address of the media file"),
         task_type: str = Form("transcribe",
                               description="任务类型，默认为 'transcription'，具体取值请参考文档 / Task type, default is 'transcription', refer to the documentation for specific values"),
         callback_url: Optional[str] = Form("",
@@ -91,7 +94,7 @@ async def task_create(
 
     ### 用途说明:
 
-    - 上传媒体文件并且创建一个Whisper任务在后台处理。
+    - 上传媒体文件或指定媒体文件的 URL 地址，并创建一个后台处理的 Whisper 任务。
     - 任务的处理优先级可以通过`priority`参数指定。
     - 任务的类型可以通过`task_type`参数指定。
     - 任务的处理不是实时的，这样的好处是可以避免线程阻塞，提高性能。
@@ -100,7 +103,8 @@ async def task_create(
 
     ### 参数说明:
 
-    - `file` (UploadFile): 上传的媒体文件，支持Ffmpeg支持的音频和视频格式。
+    - `file` (UploadFile): 上传的媒体文件，支持 Ffmpeg 支持的音频和视频格式，与`file_url`参数二选一。
+    - `file_url` (Optional[str]): 媒体文件的 URL 地址，与`file`参数二选一。
     - `task_type` (str): 任务类型，默认为 'transcription'，具体取值如下。
         - 当后端使用 `openai_whisper` 引擎时，支持如下取值:
             - `transcribe`: 转录任务。
@@ -131,13 +135,14 @@ async def task_create(
 
     ### 错误代码说明:
 
+    - `400`: 请求参数错误，例如文件或文件URL为空。
     - `500`: 未知错误。
 
     # [English]
 
     ### Purpose:
 
-    - Upload a media file and create a Whisper task to be processed in the background.
+    - Upload a media file or specify the URL address of the media file and create a Whisper task for background processing.
     - The processing priority of the task can be specified using the `priority` parameter.
     - The type of task can be specified using the `task_type` parameter.
     - The processing of the task is not real-time, which avoids thread blocking and improves performance.
@@ -146,7 +151,8 @@ async def task_create(
 
     ### Parameters:
 
-    - `file` (UploadFile): The uploaded media file, supporting audio and video formats supported by Ffmpeg.
+    - `file` (UploadFile): The uploaded media file, supporting audio and video formats supported by Ffmpeg, either `file` or `file_url` parameter is required.
+    - `file_url` (Optional[str]): URL address of the media file, either `file` or `file_url` parameter is required.
     - `task_type` (str): The type of
     task, default is 'transcription', specific values are as follows.
         - When the backend uses the `openai_whisper` engine, the following values are supported:
@@ -178,8 +184,48 @@ async def task_create(
 
     ### Error Code Description:
 
+    - `400`: Request parameter error, such as file or file URL is empty.
     - `500`: Unknown error.
     """
+
+    # 检查文件或文件URL是否为空 | Check if the file or file URL is empty
+    if not (file or file_url):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorResponseModel(
+                code=status.HTTP_400_BAD_REQUEST,
+                message="The file or file_url parameter cannot be empty, you must provide one of them",
+                router=str(request.url),
+                params=dict(request.query_params),
+            ).dict()
+        )
+
+    # 检查文件和文件URL是否同时存在 | Check if both file and file URL are provided
+    if file and file_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorResponseModel(
+                code=status.HTTP_400_BAD_REQUEST,
+                message="The file and file_url parameters cannot be provided at the same time",
+                router=str(request.url),
+                params=dict(request.query_params),
+            ).dict()
+        )
+
+    # 检查 URL 格式是否正确 | Check if the URL format is correct
+    if file_url:
+        parsed_url = urlparse(file_url)
+        if not parsed_url.scheme or not parsed_url.netloc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ErrorResponseModel(
+                    code=status.HTTP_400_BAD_REQUEST,
+                    message="The format of the file URL is incorrect",
+                    router=str(request.url),
+                    params=dict(request.query_params),
+                ).dict()
+            )
+
     try:
         decode_options = {
             "language": language if language else None,
@@ -196,8 +242,9 @@ async def task_create(
             "hallucination_silence_threshold": hallucination_silence_threshold
         }
         task_info = await request.app.state.whisper_service.create_whisper_task(
-            file=file,
-            file_name=file.filename,
+            file=file if file else None,
+            file_name=file.filename if file else None,
+            file_url=file_url if file_url else None,
             callback_url=callback_url,
             decode_options=decode_options,
             task_type=task_type,

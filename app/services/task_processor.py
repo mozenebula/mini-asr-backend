@@ -31,6 +31,7 @@
 
 import asyncio
 import datetime
+import os
 import threading
 import time
 import traceback
@@ -216,7 +217,6 @@ class TaskProcessor:
                 # 删除临时文件 | Delete temporary file
                 if Settings.FileSettings.delete_temp_files_after_processing and task.file_path:
                     await self.file_utils.delete_file(task.file_path)
-                    self.logger.debug(f"Deleted temporary file: {task.file_path}")
                 else:
                     self.logger.debug(f"Keeping temporary file: {task.file_path}")
 
@@ -323,7 +323,6 @@ class TaskProcessor:
         results = await asyncio.gather(*futures, return_exceptions=True)
 
         for task, result in zip(tasks, results):
-            print(f"Task {task.id} processed with result: {result['status'].value}")
             # 添加清理任务到队列中 | Add cleanup task to queue
             task_and_task = {
                 "task": task,
@@ -340,7 +339,7 @@ class TaskProcessor:
                     Priority    : {task.priority}
                     File        : {task.file_name}
                     Size        : {task.file_size_bytes} bytes
-                    Duration    : {task.file_duration:.2f} seconds
+                    Duration    : {task.file_duration} seconds
                     Created At  : {task.created_at}
                     Output URL  : {task.output_url}
                     Error       : {str(result)}
@@ -369,11 +368,40 @@ class TaskProcessor:
                 Priority    : {task.priority}
                 File        : {task.file_name}
                 Size        : {task.file_size_bytes} bytes
-                Duration    : {task.file_duration:.2f} seconds
+                Duration    : {task.file_duration} seconds
                 Created At  : {task.created_at}
                 Output URL  : {task.output_url}
                 """
             )
+
+            # 检查任务是否需要从 URL 下载文件 | Check if the task requires downloading the file from a URL
+            if not task.file_path and task.file_url:
+                self.logger.info("Detected task with file URL, start downloading file from URL...")
+
+                # 异步下载文件并获取相关信息 | Asynchronously download the file and get relevant information
+                task.file_path = asyncio.run(self.file_utils.download_file_from_url(task.file_url))
+
+                # 检查文件路径是否有效 | Check if the file path is valid
+                if not task.file_path:
+                    raise ValueError("Failed to download file: file path is missing")
+
+                # 获取文件时长和大小 | Get file duration and size
+                task.file_duration = asyncio.run(self.file_utils.get_audio_duration(task.file_path))
+                task.file_size_bytes = os.path.getsize(task.file_path)
+
+                # 检查下载后的文件属性是否齐全 | Check if the downloaded file attributes are complete
+                if not task.file_path or task.file_size_bytes == 0 or task.file_duration == 0:
+                    raise ValueError("Error: Incomplete file download or invalid file attributes")
+
+                # 日志记录 | Log the download
+                self.logger.info(f"""
+                    Downloaded task file from URL:
+                    ID          : {task.id}
+                    File Path   : {task.file_path}
+                    File Size   : {task.file_size_bytes} bytes
+                    Duration    : {task.file_duration} seconds
+                    URL         : {task.file_url}
+                    """)
 
             # 获取模型实例 | Acquire a model instance
             model = asyncio.run(self.model_pool.get_model())
@@ -426,17 +454,20 @@ class TaskProcessor:
                     Type        : {task.task_type}
                     File        : {task.file_name}
                     Size        : {task.file_size_bytes} bytes
-                    Duration    : {task.file_duration:.2f} seconds
+                    Duration    : {task.file_duration} seconds
                     Created At  : {task.created_at}
                     Output URL  : {task.output_url}
                     Language    : {language}
-                    Processing Time: {task_processing_time:.2f} seconds
+                    Processing Time: {task_processing_time} seconds
                     """
                 )
 
                 # 更新任务状态和结果 | Update task status and result
                 task_update = {
                     "status": TaskStatus.COMPLETED,
+                    "file_path": task.file_path,
+                    "file_size_bytes": task.file_size_bytes,
+                    "file_duration": task.file_duration,
                     "language": language,
                     "result": result,
                     "task_processing_time": task_processing_time
@@ -464,7 +495,7 @@ class TaskProcessor:
                 Type        : {task.task_type}
                 File        : {task.file_name}
                 Size        : {task.file_size_bytes} bytes
-                Duration    : {task.file_duration:.2f} seconds
+                Duration    : {task.file_duration} seconds
                 Created At  : {task.created_at}
                 Output URL  : {task.output_url}
                 Error       : {str(e)}

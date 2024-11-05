@@ -225,8 +225,9 @@ class WhisperService:
 
     async def create_whisper_task(
             self,
-            file: Union[UploadFile, bytes],
-            file_name: str,
+            file: Optional[UploadFile],
+            file_name: Optional[str],
+            file_url: Optional[str],
             callback_url: Optional[str],
             decode_options: dict,
             task_type: str,
@@ -238,8 +239,9 @@ class WhisperService:
 
         Create a Whisper task and save it to the database.
 
-        :param file: FastAPI 上传的文件对象或字节数据 | FastAPI uploaded file object or byte data
+        :param file: FastAPI 上传的文件对象 | FastAPI uploaded file object
         :param file_name: 文件名称 | File name
+        :param file_url: 文件 URL | File URL
         :param callback_url: 回调 URL | Callback URL
         :param decode_options: Whisper 解码选项 | Whisper decode options
         :param task_type: Whisper 任务类型 | Whisper task type
@@ -247,10 +249,18 @@ class WhisperService:
         :param request: FastAPI 请求对象 | FastAPI request object
         :return: 保存到数据库的任务对象 | Task object saved to the database
         """
-        temp_file_path = await self.file_utils.save_uploaded_file(file=file, file_name=file_name)
-        self.logger.debug(f"Saved uploaded file to temporary path: {temp_file_path}")
 
-        duration = await self.get_audio_duration(temp_file_path)
+        # 如果file是UploadFile对象或者bytes对象，那么就保存到临时文件夹，然后返回临时文件路径
+        # If file is an UploadFile object or bytes object, save it to the temporary folder and return the temporary file path
+        if file:
+            temp_file_path = await self.file_utils.save_uploaded_file(file=file, file_name=file_name)
+            self.logger.debug(f"Saved uploaded file to temporary path: {temp_file_path}")
+            duration = await self.file_utils.get_audio_duration(temp_file_path)
+            file_size_bytes = os.path.getsize(temp_file_path)
+        else:
+            temp_file_path = None
+            duration = None
+            file_size_bytes = None
 
         async with self.db_manager.get_session() as session:
             task = Task(
@@ -258,8 +268,9 @@ class WhisperService:
                 callback_url=callback_url,
                 task_type=task_type,
                 file_path=temp_file_path,
+                file_url=file_url,
                 file_name=file_name,
-                file_size_bytes=os.path.getsize(temp_file_path),
+                file_size_bytes=file_size_bytes,
                 decode_options=decode_options,
                 file_duration=duration,
                 priority=priority
@@ -273,23 +284,6 @@ class WhisperService:
 
         self.logger.info(f"Created transcription task with ID: {task_id}")
         return task
-
-    async def get_audio_duration(self, temp_file_path: str) -> float:
-        """
-        获取音频文件的时长
-
-        Get the duration of an audio file
-
-        :param temp_file_path: 文件路径 | File path
-        :return: 音频文件时长（秒） | Audio file duration (seconds)
-        """
-        self.logger.debug(f"Getting duration of audio file: {temp_file_path}")
-        audio = await asyncio.get_running_loop().run_in_executor(
-            _executor, lambda: AudioSegment.from_file(temp_file_path)
-        )
-        duration = len(audio) / 1000.0
-        self.logger.debug(f"Audio file duration: {duration:.2f} seconds")
-        return duration
 
     async def generate_subtitle(self,
                                 task: Task,

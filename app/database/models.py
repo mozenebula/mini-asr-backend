@@ -118,13 +118,15 @@ class Task(Base):
     task_processing_time = Column(Float, nullable=True)
 
     # 文件路径 | File path
-    file_path = Column(Text, nullable=False)
+    file_path = Column(Text, nullable=True)
     # 文件名称 | File name
-    file_name = Column(String(255), nullable=False)
+    file_name = Column(Text, nullable=True)
+    # 文件URL | File URL
+    file_url = Column(Text, nullable=True)
     # 文件大小 | File size
-    file_size_bytes = Column(Integer)
+    file_size_bytes = Column(Integer, nullable=True)
     # 音频时长 | Audio duration
-    file_duration = Column(Float)
+    file_duration = Column(Float, nullable=True)
 
     # 解码选项 | Decode options
     decode_options = Column(JSON)
@@ -152,6 +154,7 @@ class Task(Base):
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'task_processing_time': self.task_processing_time,
             'file_path': self.file_path,
+            'file_url': self.file_url,
             'file_name': self.file_name,
             'file_size_bytes': self.file_size_bytes,
             'file_duration': self.file_duration,

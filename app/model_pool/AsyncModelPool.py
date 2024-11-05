@@ -296,9 +296,7 @@ class AsyncModelPool:
                     await asyncio.gather(*tasks)
                     self.logger.info(f"Batch of {batch_size} model instance(s) created.")
 
-                self.logger.info(f"""
-                Successfully initialized AsyncModelPool with {instances_to_create} instances.
-                """)
+                self.logger.info(f"Successfully initialized AsyncModelPool with {instances_to_create} instances.")
 
         except Exception as e:
             self.logger.error(f"Failed to initialize AsyncModelPool: {e}")

@@ -40,7 +40,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 from app.crawlers.platforms.example_tiktok.endpoints import TikTokAPIEndpoints
 from app.crawlers.platforms.example_tiktok.models import FeedVideoDetail
-from app.http_client.AsyncHttpClient import BaseAsyncHttpClient
+from app.http_client.AsyncHttpClient import AsyncHttpClient
 
 
 class TikTokAPPCrawler:
@@ -85,7 +85,7 @@ class TikTokAPPCrawler:
         url = f"{TikTokAPIEndpoints.HOME_FEED}?{param_str}"
 
         # 使用 async with 调用 BaseAsyncHttpClient 进行请求 (Use async with to call BaseAsyncHttpClient for the request)
-        async with BaseAsyncHttpClient(headers=headers) as client:
+        async with AsyncHttpClient(headers=headers) as client:
             response = await client.fetch_get_json(url)
             video_data = response.get("aweme_list", [{}])[0]
 

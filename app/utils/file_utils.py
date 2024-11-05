@@ -30,6 +30,7 @@
 # ==============================================================================
 
 import asyncio
+import mimetypes
 import os
 import tempfile
 import aiofiles
@@ -39,9 +40,17 @@ import stat
 import filetype
 import traceback
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Any, Optional, Union
 from fastapi import UploadFile
+from pydub import AudioSegment
+
 from app.utils.logging_utils import configure_logging
+from app.http_client.AsyncHttpClient import AsyncHttpClient
+
+
+# 初始化静态线程池，所有实例共享 | Initialize static thread pool, shared by all instances
+_executor = ThreadPoolExecutor()
 
 
 class FileUtils:
@@ -114,6 +123,69 @@ class FileUtils:
 
         # 定义允许的文件扩展名 | Define allowed file extensions
         self.ALLOWED_EXTENSIONS = allowed_extensions
+
+    async def download_file_from_url(self, file_url: str) -> str:
+        """
+        从指定 URL 下载文件并保存到临时目录
+
+        Download a file from the specified URL and save it to the temporary directory.
+
+        :param file_url: 文件的完整 URL 地址 | Full URL of the file
+        :return: 下载并保存的文件路径 | Path to the downloaded and saved file
+        """
+        async with AsyncHttpClient(follow_redirects=True) as client:
+            try:
+                # 使用 GET 请求检查文件大小和类型 | Use a GET request to check the file size and type
+                response = await client.fetch_data("GET", file_url, headers={"Range": "bytes=0-1023"})
+                content_range = response.headers.get("Content-Range")
+                content_type = response.headers.get("Content-Type")
+
+                # 获取文件扩展名 | Determine file extension
+                extension = mimetypes.guess_extension(content_type) if content_type else ""
+                if not extension:
+                    self.logger.warning(f"Could not determine file extension from Content-Type: {content_type}")
+
+                # 生成唯一的安全文件名，包含扩展名 | Generate a unique file name with the extension
+                file_name = self._generate_safe_file_name(os.path.basename(file_url)) + extension
+                file_path = os.path.join(self.TEMP_DIR, file_name)
+                file_path = os.path.realpath(file_path)
+
+                # 确保文件路径在 TEMP_DIR 内部 | Ensure file path is within TEMP_DIR
+                if not file_path.startswith(os.path.realpath(self.TEMP_DIR) + os.sep):
+                    self.logger.error(f"Invalid file path detected: {file_path}")
+                    raise ValueError("Invalid file path detected.")
+
+                # 检查文件大小限制 | Check file size if Content-Range is supported
+                if content_range:
+                    match = re.search(r"/(\d+)$", content_range)
+                    if match:
+                        file_size = int(match.group(1))
+                        if self.LIMIT_FILE_SIZE and file_size > self.MAX_FILE_SIZE:
+                            error_msg = f"File size exceeds the limit: {file_size} > {self.MAX_FILE_SIZE}"
+                            self.logger.error(error_msg)
+                            raise ValueError(error_msg)
+
+                # 开始完整下载文件 | Start full download of the file
+                await client.download_file(file_url, file_path, chunk_size=self.CHUNK_SIZE)
+
+                # 检查文件类型是否允许 | Check if file type is allowed
+                if not self.is_allowed_file_type(file_path):
+                    error_msg = f"File type from URL {file_url} is not supported."
+                    self.logger.error(error_msg)
+                    await self.delete_file(file_path)
+                    raise ValueError(error_msg)
+
+                # 设置文件权限，仅所有者可读写 | Set file permissions to 600
+                if os.name != 'nt':
+                    await asyncio.to_thread(os.chmod, file_path, stat.S_IRUSR | stat.S_IWUSR)
+
+                self.logger.debug("File downloaded and saved successfully.")
+                return file_path
+
+            except (OSError, IOError) as e:
+                self.logger.error(f"Failed to download and save file due to an exception: {str(e)}")
+                self.logger.error(traceback.format_exc())
+                raise ValueError("An error occurred while downloading and saving the file.")
 
     async def save_file(self, file: bytes, file_name: str,
                         generate_safe_file_name: bool = True,
@@ -217,16 +289,19 @@ class FileUtils:
             self.logger.error(traceback.format_exc())
             raise ValueError("An error occurred while deleting files.")
 
-    async def delete_file(self, file_path: str) -> None:
+    async def delete_file(self, file_path: str, retries: int = 3, delay: float = 0.5) -> None:
         """
-        异步删除单个文件
+        异步删除单个文件，带有重试机制
 
-        Asynchronously delete a single file.
+        Asynchronously delete a single file with retry mechanism.
 
         :param file_path: 要删除的文件路径 | Path of the file to delete.
+        :param retries: 重试次数 | Number of retries if deletion fails
+        :param delay: 每次重试之间的延迟时间（秒） | Delay time between retries in seconds
         :return: None
         """
         file_path = os.path.realpath(file_path)
+
         # 确保文件路径在 TEMP_DIR 内部 | Ensure file path is within TEMP_DIR
         if not file_path.startswith(os.path.realpath(self.TEMP_DIR) + os.sep):
             self.logger.warning(f"Attempted to delete file outside of TEMP_DIR: {file_path}")
@@ -237,22 +312,36 @@ class FileUtils:
             self.logger.warning(f"Symbolic links are not allowed: {file_path}")
             return
 
-        try:
-            # 检查文件是否为常规文件 | Check if the file is a regular file
-            file_stat = await asyncio.to_thread(os.lstat, file_path)
-            if not stat.S_ISREG(file_stat.st_mode):
-                self.logger.warning(f"Not a regular file: {file_path}")
+        for attempt in range(retries):
+            try:
+                # 检查文件是否为常规文件 | Check if the file is a regular file
+                file_stat = await asyncio.to_thread(os.lstat, file_path)
+                if not stat.S_ISREG(file_stat.st_mode):
+                    self.logger.warning(f"Not a regular file: {file_path}")
+                    return
+
+                # 尝试异步删除文件 | Attempt to delete the file asynchronously
+                await asyncio.to_thread(os.remove, file_path)
+                self.logger.debug(f"File deleted successfully: {file_path}")
                 return
-            # 异步删除文件 | Asynchronously delete the file
-            await asyncio.to_thread(os.remove, file_path)
-            self.logger.debug(f"File deleted successfully: {file_path}")
-        except FileNotFoundError:
-            self.logger.warning(f"File not found: {file_path}")
-            self.logger.error(traceback.format_exc())
-        except (OSError, IOError) as e:
-            self.logger.error(f"Failed to delete file due to an exception: {str(e)}")
-            self.logger.error(traceback.format_exc())
-            raise ValueError("An error occurred while deleting the file.")
+
+            except FileNotFoundError:
+                self.logger.warning(f"File not found: {file_path}")
+                return  # 无需重试 | No need to retry if file is not found
+
+            except PermissionError as e:
+                # 如果文件被占用，记录重试信息 | Log retry information if file is in use
+                self.logger.warning(f"Attempt {attempt + 1} to delete file failed due to permission error: {file_path}")
+                if attempt < retries - 1:
+                    await asyncio.sleep(delay)  # 延迟后重试 | Delay before retrying
+                else:
+                    self.logger.error(f"Failed to delete file after {retries} attempts: {file_path}")
+                    raise ValueError("An error occurred while deleting the file due to a permission issue.") from e
+
+            except (OSError, IOError) as e:
+                self.logger.error(f"Failed to delete file due to an exception: {str(e)}")
+                self.logger.error(traceback.format_exc())
+                raise ValueError("An error occurred while deleting the file.") from e
 
     async def cleanup_temp_files(self) -> None:
         """
@@ -329,6 +418,35 @@ class FileUtils:
             self.logger.error(f"Unable to determine file type: {str(e)}")
             self.logger.error(traceback.format_exc())
             return False
+
+    async def get_audio_duration(self, temp_file_path: str) -> float:
+        """
+        获取音频文件的时长
+
+        Get the duration of an audio file
+
+        :param temp_file_path: 文件路径 | File path
+        :return: 音频文件时长（秒） | Audio file duration (seconds)
+        :raises: ValueError: 获取音频时长时发生错误 | An error occurred while getting the audio duration
+        """
+        # 初始化 audio 变量 | Initialize audio variable
+        audio = None
+        try:
+            self.logger.debug(f"Getting duration of audio file: {temp_file_path}")
+            audio = await asyncio.get_running_loop().run_in_executor(
+                _executor, lambda: AudioSegment.from_file(temp_file_path)
+            )
+            duration = len(audio) / 1000.0
+            self.logger.debug(f"Audio file duration: {duration:.2f} seconds")
+            return duration
+        except Exception as e:
+            self.logger.error(f"Failed to get audio duration: {str(e)}")
+            self.logger.error(traceback.format_exc())
+            raise ValueError("An error occurred while getting the audio duration.")
+        finally:
+            # 确保释放文件资源 | Ensure the file resource is released
+            if audio is not None:
+                del audio
 
     async def __aenter__(self) -> 'FileUtils':
         """

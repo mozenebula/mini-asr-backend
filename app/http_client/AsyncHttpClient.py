@@ -44,7 +44,7 @@ from app.http_client.HttpException import (
     APIUnauthorizedError,
     APINotFoundError,
     APIRateLimitError,
-    APIRetryExhaustedError,
+    APIRetryExhaustedError, APIFileDownloadError,
 )
 from app.utils.logging_utils import configure_logging
 
@@ -52,14 +52,14 @@ from app.utils.logging_utils import configure_logging
 logger = configure_logging(__name__)
 
 
-class BaseAsyncHttpClient:
+class AsyncHttpClient:
     """
     异步 HTTP 客户端 (Asynchronous HTTP client)
     """
 
     def __init__(self, proxy_settings: Optional[Dict[str, str]] = None, retry_limit: int = 3,
                  max_connections: int = 50, request_timeout: int = 10, max_concurrent_tasks: int = 50,
-                 headers: Optional[Dict[str, str]] = None, base_backoff: float = 1.0):
+                 headers: Optional[Dict[str, str]] = None, base_backoff: float = 1.0, follow_redirects: bool = False):
         """
         初始化 BaseAsyncHttpClient 实例
 
@@ -72,6 +72,7 @@ class BaseAsyncHttpClient:
         :param max_concurrent_tasks: 最大并发任务数 | Maximum concurrent task count
         :param headers: 请求头设置 | Request headers
         :param base_backoff: 重试的基础退避时间 | Base backoff time for retries
+        :param follow_redirects: 是否跟踪重定向 | Whether to follow redirects
         """
         self.proxy_settings = proxy_settings if isinstance(proxy_settings, dict) else None
         self.headers = headers or {
@@ -94,7 +95,8 @@ class BaseAsyncHttpClient:
             proxies=self.proxy_settings,
             timeout=httpx.Timeout(request_timeout),
             limits=httpx.Limits(max_connections=max_connections),
-            transport=httpx.AsyncHTTPTransport(retries=retry_limit)
+            transport=httpx.AsyncHTTPTransport(retries=retry_limit),
+            follow_redirects=follow_redirects
         )
 
     async def fetch_response(self, url: str, **kwargs) -> Response:
@@ -174,6 +176,26 @@ class BaseAsyncHttpClient:
         :return: 响应对象 | Response object
         """
         return await self.fetch_data('HEAD', url, **kwargs)
+
+    async def download_file(self, url: str, save_path: str, chunk_size: int = 1024) -> None:
+        """
+        下载文件到指定路径 (Download file to specified path)
+
+        :param url: 文件的完整 URL 地址 | Full URL of the file
+        :param save_path: 文件保存路径 | Path to save the downloaded file
+        :param chunk_size: 下载块的大小（字节） | Size of each download chunk in bytes
+        """
+        async with self.semaphore:
+            try:
+                async with self.aclient.stream("GET", url) as response:
+                    response.raise_for_status()
+                    with open(save_path, "wb") as file:
+                        async for chunk in response.aiter_bytes(chunk_size):
+                            file.write(chunk)
+                    logger.info(f"File downloaded successfully: {save_path}")
+            except (httpx.RequestError, httpx.HTTPStatusError) as error:
+                logger.error(f"Failed to download file from {url}: {error}", exc_info=True)
+                raise APIFileDownloadError(f"Failed to download file from {url}")
 
     @staticmethod
     def handle_http_status_error(http_error, url: str, attempt):
@@ -257,7 +279,7 @@ if __name__ == "__main__":
         演示 BaseAsyncHttpClient 的基本用法，包括 GET、POST 和 HEAD 请求。
         Demonstrates basic usage of BaseAsyncHttpClient, including GET, POST, and HEAD requests.
         """
-        async with BaseAsyncHttpClient(
+        async with AsyncHttpClient(
                 headers={"User-Agent": "Demo-Client/1.0"},
                 request_timeout=5,
                 max_connections=10,
@@ -290,6 +312,7 @@ if __name__ == "__main__":
             except APIResponseError as e:
                 print(f"GET request with custom headers failed: {e}")
                 print(traceback.format_exc())
+
 
     # 运行异步主函数 (Run the asynchronous main function)
     asyncio.run(main())

@@ -34,7 +34,7 @@ import datetime
 from tenacity import *
 from typing import Optional, Dict, Union
 from app.database.DatabaseManager import DatabaseManager
-from app.http_client.AsyncHttpClient import BaseAsyncHttpClient
+from app.http_client.AsyncHttpClient import AsyncHttpClient
 from app.utils.logging_utils import configure_logging
 from app.database.models import Task
 
@@ -78,7 +78,7 @@ class CallbackService:
         headers = headers or self.default_headers
         if callback_url:
             logger.info(f"Sending task callback notification for task {task.id} to: {callback_url}")
-            async with BaseAsyncHttpClient(
+            async with AsyncHttpClient(
                     proxy_settings=proxy_settings,
                     headers=headers,
                     request_timeout=request_timeout
