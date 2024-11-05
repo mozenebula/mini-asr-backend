@@ -35,17 +35,12 @@ import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
-from typing import List, Any, Iterable, Union
+from typing import List, Any, Iterable, Optional
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
-
-from app.services.callback_service import CallbackService
-from app.database.SqliteDatabase import SqliteDatabaseManager
-from app.database.MySQLDatabase import MySQLDatabaseManager
+from app.database.DatabaseManager import DatabaseManager
 from app.database.models import Task, TaskStatus
 from app.model_pool.async_model_pool import AsyncModelPool
+from app.services.callback_service import CallbackService
 from app.utils.file_utils import FileUtils
 from app.utils.logging_utils import configure_logging
 from config.settings import Settings
@@ -64,7 +59,8 @@ class TaskProcessor:
     def __init__(self,
                  model_pool: AsyncModelPool,
                  file_utils: FileUtils,
-                 db_manager: Union[SqliteDatabaseManager, MySQLDatabaseManager],
+                 database_type: str,
+                 database_url: str,
                  max_concurrent_tasks: int,
                  task_status_check_interval: int
                  ) -> None:
@@ -75,40 +71,35 @@ class TaskProcessor:
 
         :param model_pool: AsyncModelPool 实例对象，用于模型管理 | AsyncModelPool instance for model management
         :param file_utils: FileUtils 实例对象，用于文件操作 | FileUtils instance for file operations
-        :param db_manager: DatabaseManager 实例对象，用于数据库交互 | DatabaseManager instance for database interactions
         :param max_concurrent_tasks: 任务并发数 | Task concurrency
         :param task_status_check_interval: 任务状态检查间隔（秒） | Task status check interval (seconds)
         :return: None
         """
         self.model_pool: AsyncModelPool = model_pool
         self.file_utils: FileUtils = file_utils
+        # 保存数据库类型 | Save database type
+        self.database_type = database_type
+        # 保存数据库 URL | Save database URL
+        self.database_url = database_url
+        # 初始化数据库管理器 | Initialize database manager
+        self.db_manager: Optional[DatabaseManager] = None
+        # 初始化任务队列 | Initialize task queue
+        self.update_queue = asyncio.Queue()
+        # 初始化查询请求队列 | Initialize query request queue
+        self.fetch_queue = asyncio.Queue()
+        # 创建任务处理队列 | Create task processing queue
+        self.task_processing_queue = asyncio.Queue()
+        # 创建清理队列 | Create cleanup queue
+        self.cleanup_queue = asyncio.Queue()
+        # 创建回调队列 | Create callback queue
+        self.callback_queue = asyncio.Queue()
         self.loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()
         self.thread: threading.Thread = threading.Thread(target=self.run_loop)
         self.logger = configure_logging(name=__name__)
         self.shutdown_event: threading.Event = threading.Event()
-        self.db_manager: Union[SqliteDatabaseManager, MySQLDatabaseManager] = db_manager
         self.callback_service: CallbackService = CallbackService()
         self.max_concurrent_tasks: int = max_concurrent_tasks
         self.task_status_check_interval: int = task_status_check_interval
-
-        # # 使用独立的数据库管理器防止异步事件冲突 | Use a separate database manager to prevent asynchronous event conflicts
-        # self.db_type = Settings.DatabaseSettings.db_type
-        # self.db_url = Settings.DatabaseSettings.sqlite_url if self.db_type == "sqlite" else Settings.DatabaseSettings.mysql_url
-        # self.db_engine = create_async_engine(
-        #         self.db_url,
-        #         echo=False,
-        #         pool_pre_ping=True,
-        #         future=True
-        #     )
-        # self.db_session = sessionmaker(
-        #         bind=self.db_engine,
-        #         expire_on_commit=False,
-        #         class_=AsyncSession
-        #     )
-        # self.db_manager: Union[SqliteDatabaseManager, MySQLDatabaseManager] = db_manager
-        # # 将数据库管理器的引擎和会话工厂设置为当前实例的引擎和会话工厂 | Set the engine and session factory of the database manager to the engine and session factory of the current instance
-        # # self.db_manager._engine = self.db_engine
-        # # self.db_manager._session_factory = self.db_session
 
     def start(self) -> None:
         """
@@ -144,8 +135,23 @@ class TaskProcessor:
         """
         asyncio.set_event_loop(self.loop)
 
+        # 在事件循环中初始化数据库管理器
+        self.loop.run_until_complete(self.initialize_db_manager())
+
+        # 使用 create_task 启动 fetch_task_worker 作为持续运行的后台任务 | Start fetch_task_worker as a continuous background task using create_task
+        self.loop.create_task(self.fetch_task_worker())
+
+        # 使用 create_task 启动 process_update_queue 作为持续运行的后台任务 | Start process_update_queue as a continuous background task using create_task
+        self.loop.create_task(self.update_task_worker())
+
         # 使用 create_task 启动 process_tasks 作为持续运行的后台任务 | Start process_tasks as a continuous background task using create_task
-        self.loop.create_task(self.process_tasks())
+        self.loop.create_task(self.process_tasks_worker())
+
+        # 使用 create_task 启动 cleanup_worker 作为持续运行的后台任务 | Start cleanup_worker as a continuous background task using create_task
+        self.loop.create_task(self.cleanup_worker())
+
+        # 使用 create_task 启动 callback_worker 作为持续运行的后台任务 | Start callback_worker as a continuous background task using create_task
+        self.loop.create_task(self.callback_worker())
 
         # 使用 run_forever 让事件循环一直运行，直到 stop 被调用 | Use run_forever to keep the event loop running until stop is called
         self.loop.run_forever()
@@ -158,12 +164,104 @@ class TaskProcessor:
         self.loop.close()
         self.logger.info("TaskProcessor Event loop closed.")
 
-    # @asynccontextmanager
-    # async def get_session(self):
-    #     async with self.db_session() as session:
-    #         yield session
+    async def initialize_db_manager(self) -> None:
+        """
+        在 TaskProcessor 的事件循环中初始化独立的数据库管理器，这是为了确保连接池绑定到 TaskProcessor 的事件循环。
 
-    async def process_tasks(self) -> None:
+        Initializes a separate database manager in the TaskProcessor's event loop to ensure the connection pool is bound to the TaskProcessor's event loop.
+
+        :return: None
+        """
+        self.db_manager = DatabaseManager(
+            database_type=self.database_type,
+            database_url=self.database_url,
+            loop=self.loop
+        )
+        await self.db_manager.initialize()  # 确保连接池绑定到 TaskProcessor 的事件循环
+
+    async def fetch_task_worker(self):
+        """
+        处理 fetch_queue 中的数据库查询请求
+
+        Processes database query requests in the fetch_queue
+        """
+        while not self.shutdown_event.is_set():
+            # 从 fetch_queue 中获取请求（阻塞等待） | Get request from fetch_queue (blocking wait)
+            await self.fetch_queue.get()
+            try:
+                # 执行数据库查询
+                tasks = await self.db_manager.get_queued_tasks(self.max_concurrent_tasks)
+                for task in tasks:
+                    # 将任务状态更新为处理中 | Update task status to processing
+                    await self.db_manager.update_task(task.id, status=TaskStatus.PROCESSING)
+                # 将结果放入 task_result_queue 中 | Put the result into task_result_queue
+                await self.task_processing_queue.put(tasks)
+            except Exception as e:
+                self.logger.error(f"Error fetching tasks from database: {str(e)}")
+            finally:
+                # 标记查询完成 | Mark the query as completed
+                self.fetch_queue.task_done()
+
+    async def cleanup_worker(self) -> None:
+        """
+        异步清理工作协程，从队列中获取任务并执行文件删除和回调。
+
+        Asynchronous cleanup worker coroutine that takes tasks from the queue and performs file deletion and callback.
+        """
+        while not self.shutdown_event.is_set():
+            cleanup_task = await self.cleanup_queue.get()
+            task = cleanup_task["task"]
+
+            try:
+                # 删除临时文件 | Delete temporary file
+                if Settings.FileSettings.delete_temp_files_after_processing and task.file_path:
+                    await self.file_utils.delete_file(task.file_path)
+                    self.logger.debug(f"Deleted temporary file: {task.file_path}")
+                else:
+                    self.logger.debug(f"Keeping temporary file: {task.file_path}")
+
+            except Exception as e:
+                self.logger.error(f"Error during cleanup for task ID {task.id}: {e}")
+                self.logger.error(traceback.format_exc())
+            finally:
+                self.cleanup_queue.task_done()
+
+    async def callback_worker(self) -> None:
+        """
+        异步回调工作协程，从队列中获取回调任务并执行回调通知。
+
+        Asynchronous callback worker coroutine that takes callback tasks from the queue and performs callback notifications.
+        """
+        while not self.shutdown_event.is_set():
+            callback_task = await self.callback_queue.get()
+            task = callback_task["task"]
+
+            try:
+                # 发送回调通知 | Send callback notification
+                if task.callback_url:
+                    await self.callback_service.task_callback_notification(task=task, db_manager=self.db_manager)
+
+            except Exception as e:
+                self.logger.error(f"Error during callback for task ID {task.id}: {e}")
+                self.logger.error(traceback.format_exc())
+            finally:
+                self.callback_queue.task_done()
+
+    async def update_task_worker(self):
+        """
+        异步处理更新队列中的数据库操作
+
+        Asynchronously processes database operations in the update queue
+        """
+        while not self.shutdown_event.is_set():
+            task_id, update_data = await self.update_queue.get()
+            try:
+                await self.db_manager.update_task(task_id, **update_data)
+                self.update_queue.task_done()
+            except Exception as e:
+                self.logger.error(f"Error updating task {task_id}: {str(e)}")
+
+    async def process_tasks_worker(self) -> None:
         """
         持续从数据库中按优先级拉取任务并处理。若无任务，则等待并重试。
 
@@ -178,7 +276,8 @@ class TaskProcessor:
 
         while not self.shutdown_event.is_set():
             try:
-                tasks: List[Task] = await self._fetch_multiple_tasks()
+                await self.fetch_queue.put("fetch")
+                tasks: List[Task] = await self.task_processing_queue.get()
 
                 if tasks:
                     await self._process_multiple_tasks(tasks)
@@ -224,6 +323,14 @@ class TaskProcessor:
         results = await asyncio.gather(*futures, return_exceptions=True)
 
         for task, result in zip(tasks, results):
+            print(f"Task {task.id} processed with result: {result['status'].value}")
+            # 添加清理任务到队列中 | Add cleanup task to queue
+            task_and_task = {
+                "task": task,
+                "result": result
+            }
+            await self.cleanup_queue.put(task_and_task)
+            await self.callback_queue.put(task_and_task)
             if isinstance(result, Exception):
                 self.logger.error(
                     f"""
@@ -243,14 +350,14 @@ class TaskProcessor:
             else:
                 self.logger.info(f"Task {task.id} processed successfully.")
 
-    def _process_task_sync(self, task: Task) -> None:
+    def _process_task_sync(self, task: Task) -> dict:
         """
         在线程池中同步处理单个任务，包括音频转录和数据库更新。
 
         Synchronously processes a single task in the thread pool, including audio transcription and database updates.
 
         :param task: 要处理的任务实例 | The task instance to process
-        :return: None
+        :return: dict: 任务处理结果 | dict: Task processing result
         """
         try:
             self.logger.info(
@@ -276,12 +383,6 @@ class TaskProcessor:
             try:
                 # 记录任务开始时间 | Record task start time
                 task_start_time: datetime.datetime = datetime.datetime.now()
-
-                # 更新任务状态为 PROCESSING | Update task status to PROCESSING
-                task_update = {
-                    "status": TaskStatus.PROCESSING
-                }
-                asyncio.run(self.db_manager.update_task(task.id, **task_update))
 
                 # 执行转录任务 | Perform transcription task
                 if self.model_pool.engine == "openai_whisper":
@@ -340,18 +441,20 @@ class TaskProcessor:
                     "result": result,
                     "task_processing_time": task_processing_time
                 }
-                asyncio.run(self.db_manager.update_task(task.id, **task_update))
-
+                self.update_queue.put_nowait((task.id, task_update))
             finally:
                 # 将模型实例归还到池中 | Return the model instance to the pool
                 asyncio.run(self.model_pool.return_model(model))
+
+            # 返回字典格式的结果 | Return the result in dictionary format
+            return task_update
 
         except Exception as e:
             task_update = {
                 "status": TaskStatus.FAILED,
                 "error_message": str(e)
             }
-            asyncio.run(self.db_manager.update_task(task.id, **task_update))
+            self.update_queue.put_nowait((task.id, task_update))
             self.logger.error(
                 f"""
                 Error processing task: 
@@ -368,16 +471,9 @@ class TaskProcessor:
                 """
             )
             self.logger.error(traceback.format_exc())
-        finally:
-            # 删除临时文件 | Delete temporary file
-            if Settings.FileSettings.delete_temp_files_after_processing:
-                asyncio.run(self.file_utils.delete_file(task.file_path))
-            else:
-                self.logger.debug(f"Keeping temporary file: {task.file_path}")
 
-            # 发送回调通知 | Send callback notification
-            if task.callback_url:
-                asyncio.run(self.callback_service.task_callback_notification(task=task, db_manager=self.db_manager))
+            # 返回字典格式的结果 | Return the result in dictionary format
+            return task_update
 
     @staticmethod
     def segments_to_dict(obj: Any) -> Any:
@@ -403,4 +499,3 @@ class TaskProcessor:
             return [TaskProcessor.segments_to_dict(item) for item in obj]
         # 直接返回非复杂类型
         return obj
-

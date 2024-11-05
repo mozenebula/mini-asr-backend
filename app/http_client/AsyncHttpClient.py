@@ -29,6 +29,8 @@
 #              `--'   `--'
 # ==============================================================================
 
+import asyncio
+import traceback
 import httpx
 import json
 import re
@@ -55,7 +57,8 @@ class BaseAsyncHttpClient:
     异步 HTTP 客户端 (Asynchronous HTTP client)
     """
 
-    _shared_client_pool = {}
+    # TODO: 客户端在某些情况下可能会被关闭，需要进一步处理 2024年11月5日01:42:23
+    _shared_client = None
 
     @classmethod
     def get_shared_client(cls, headers: Optional[dict] = None, proxies: Optional[dict] = None,
@@ -68,14 +71,12 @@ class BaseAsyncHttpClient:
         :param kwargs: 其他客户端配置参数 | Other client configuration parameters
         :return: 配置了请求头和代理的客户端实例 | Client instance with headers and proxies
         """
-        client_key = (frozenset(headers.items()) if headers else None, frozenset(proxies.items()) if proxies else None)
-
-        # Create a new client if the configuration does not exist in the pool
-        if client_key not in cls._shared_client_pool:
-            client = httpx.AsyncClient(headers=headers, proxies=proxies, **kwargs)
-            cls._shared_client_pool[client_key] = client
-
-        return cls._shared_client_pool[client_key]
+        """
+        获取单例 HTTP 客户端 (Get singleton HTTP client)
+        """
+        if cls._shared_client is None:
+            cls._shared_client = httpx.AsyncClient(headers=headers, proxies=proxies, **kwargs)
+        return cls._shared_client
 
     def __init__(self, proxy_settings: Optional[Dict[str, str]] = None, retry_limit: int = 3,
                  max_connections: int = 50, request_timeout: int = 10, max_concurrent_tasks: int = 50,
@@ -94,12 +95,15 @@ class BaseAsyncHttpClient:
         :param base_backoff: 重试的基础退避时间 | Base backoff time for retries
         """
         self.proxy_settings = proxy_settings if isinstance(proxy_settings, dict) else None
-        self.headers = headers or {}
+        self.headers = headers or {
+            "User-Agent": "Fast-Powerful-Whisper-AI-Services-API/HTTP Client (https://github.com/Evil0ctal/Fast-Powerful-Whisper-AI-Services-API)"
+        }
         self.max_concurrent_tasks = max_concurrent_tasks
         self.semaphore = asyncio.Semaphore(max_concurrent_tasks)
         self.retry_limit = retry_limit
         self.request_timeout = request_timeout
         self.base_backoff = base_backoff
+        self._is_closed = False
 
         # Use shared client instance
         self.aclient = self.get_shared_client(
@@ -246,9 +250,11 @@ class BaseAsyncHttpClient:
 
     async def close(self):
         """
-        关闭异步客户端 (Close asynchronous client)
+        关闭异步客户端，仅关闭一次 (Close asynchronous client, only once)
         """
-        await self.aclient.aclose()
+        if self._shared_client is not None:
+            await self._shared_client.aclose()
+            self._shared_client = None
 
     async def __aenter__(self):
         """
@@ -261,8 +267,6 @@ class BaseAsyncHttpClient:
 
 
 if __name__ == "__main__":
-    import asyncio
-    import traceback
 
     async def main():
         """

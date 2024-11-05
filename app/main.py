@@ -28,12 +28,11 @@
 #              )  |  \  `.___________|/    Whisper API Out of the Box (Where is my ⭐?)
 #              `--'   `--'
 # ==============================================================================
-
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.api.router import router as api_router
-from app.database.SqliteDatabase import SqliteDatabaseManager
-from app.database.MySQLDatabase import MySQLDatabaseManager
+from app.database.DatabaseManager import DatabaseManager
 from app.model_pool.async_model_pool import AsyncModelPool
 from app.services.whisper_service import WhisperService
 from app.utils.logging_utils import configure_logging
@@ -66,18 +65,20 @@ async def lifespan(application: FastAPI):
     :param application: FastAPI 应用实例 | FastAPI application instance
     :return: None
     """
+
     # 选择数据库管理器并初始化数据库 | Choose the database manager and initialize the database
     if Settings.DatabaseSettings.db_type == "sqlite":
-        logger.info(
-            "Using SQLite database as DBMS, this is suitable for small-scale projects running on a single machine.")
-        db_manager = SqliteDatabaseManager()
-        await db_manager.initialize(Settings.DatabaseSettings.sqlite_url)
+        database_url = Settings.DatabaseSettings.sqlite_url
     elif Settings.DatabaseSettings.db_type == "mysql":
-        logger.info("Using MySQL database as DBMS, this is suitable for large-scale projects distributed deployment.")
-        db_manager = MySQLDatabaseManager()
-        await db_manager.initialize(Settings.DatabaseSettings.mysql_url)
+        database_url = Settings.DatabaseSettings.mysql_url
     else:
-        raise RuntimeError("Can not recognize the database type, please check the configuration file.")
+        raise RuntimeError("Can not recognize the database type, please check the database type in the settings.")
+
+    db_manager = DatabaseManager(
+        database_type=Settings.DatabaseSettings.db_type,
+        database_url=database_url
+    )
+    await db_manager.initialize()
 
     # 实例化异步模型池 | Instantiate the asynchronous model pool
     model_pool = AsyncModelPool(

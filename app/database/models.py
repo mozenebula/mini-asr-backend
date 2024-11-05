@@ -174,25 +174,25 @@ class WorkFlow(Base):
 
 # 查询任务的可选过滤器 | Query tasks optional filter
 class QueryTasksOptionalFilter(BaseModel):
-    status: Optional[TaskStatus] = Field(None,
-                                         description="任务状态，例如 'queued' 或 'completed'")
-    priority: Optional[TaskPriority] = Field(None,
-                                             description="任务优先级，例如 'low', 'normal', 'high'")
-    created_after: Optional[dt.datetime] = Field(None,
-                                                 description="创建时间的起始时间，格式为 'YYYY-MM-DDTHH:MM:SS'")
-    created_before: Optional[dt.datetime] = Field(None,
-                                                  description="创建时间的结束时间，格式为 'YYYY-MM-DDTHH:MM:SS'")
-    language: Optional[constr(strip_whitespace=True, min_length=1, max_length=5)] = Field(None,
-                                                                                          description="检测到的语言代码")
-    engine_name: Optional[constr(strip_whitespace=True, max_length=50)] = Field(None,
-                                                                                description="引擎名称，例如 'faster_whisper'")
-    has_result: Optional[bool] = Field(None,
-                                       description="是否要求任务有结果")
-    has_error: Optional[bool] = Field(None,
+    status: Optional[TaskStatus] = Field('completed',
+                                         description="任务状态，例如 'queued' 或 'completed' | Task status, e.g. 'queued' or 'completed'")
+    priority: Optional[TaskPriority] = Field('normal',
+                                             description="任务优先级，例如 'low', 'normal', 'high' | Task priority, e.g. 'low', 'normal', 'high'")
+    created_after: Optional[dt.datetime] = Field('',
+                                                 description="创建时间的起始时间，格式为 'YYYY-MM-DDTHH:MM:SS' | Start time of creation time, format is 'YYYY-MM-DDTHH:MM:SS'")
+    created_before: Optional[dt.datetime] = Field('',
+                                                  description="创建时间的结束时间，格式为 'YYYY-MM-DDTHH:MM:SS' | End time of creation time, format is 'YYYY-MM-DDTHH:MM:SS'")
+    language: Optional[constr(strip_whitespace=True, min_length=1, max_length=5)] = Field('',
+                                                                                          description="检测到的语言代码，例如 'en' 或 'zh' | Detected language code, e.g. 'en' or 'zh'")
+    engine_name: Optional[constr(strip_whitespace=True, max_length=50)] = Field('faster_whisper',
+                                                                                description="引擎名称，例如 'faster_whisper' 或 'openai_whisper' | Engine name, e.g. 'faster_whisper' or 'openai_whisper'")
+    has_result: Optional[bool] = Field(True,
+                                       description="是否要求任务有结果 | Whether to require tasks to have results")
+    has_error: Optional[bool] = Field(False,
                                       description="是否要求任务存在错误信息")
-    limit: int = Field(20, description="每页记录数，默认值为20")
+    limit: int = Field(20, description="每页记录数，默认值为20 | Number of records per page, default value is 20")
     offset: int = Field(0,
-                        description="分页的起始位置，默认值为0")
+                        description="分页的起始位置，默认值为0 | The starting position of pagination, default value is 0")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

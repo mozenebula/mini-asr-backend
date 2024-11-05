@@ -41,8 +41,7 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 from pydub import AudioSegment
 
 from app.model_pool.async_model_pool import AsyncModelPool
-from app.database.SqliteDatabase import SqliteDatabaseManager
-from app.database.MySQLDatabase import MySQLDatabaseManager
+from app.database.DatabaseManager import DatabaseManager
 from app.database.models import Task
 from app.services.task_processor import TaskProcessor
 from app.utils.file_utils import FileUtils
@@ -62,7 +61,7 @@ class WhisperService:
 
     def __init__(self,
                  model_pool: AsyncModelPool,
-                 db_manager: Union[SqliteDatabaseManager, MySQLDatabaseManager],
+                 db_manager: DatabaseManager,
                  max_concurrent_tasks: int,
                  task_status_check_interval: int
                  ) -> None:
@@ -94,7 +93,8 @@ class WhisperService:
         self.task_processor = TaskProcessor(
             model_pool=self.model_pool,
             file_utils=self.file_utils,
-            db_manager=self.db_manager,
+            database_type=self.db_manager.database_type,
+            database_url=self.db_manager.database_url,
             max_concurrent_tasks=self.max_concurrent_tasks,
             task_status_check_interval=self.task_status_check_interval
         )
@@ -248,7 +248,7 @@ class WhisperService:
         :return: 保存到数据库的任务对象 | Task object saved to the database
         """
         temp_file_path = await self.file_utils.save_uploaded_file(file=file, file_name=file_name)
-        self.logger.debug(f"Audio file saved to temporary path: {temp_file_path}")
+        self.logger.debug(f"Saved uploaded file to temporary path: {temp_file_path}")
 
         duration = await self.get_audio_duration(temp_file_path)
 

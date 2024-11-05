@@ -34,8 +34,6 @@ from typing import Union, List, Optional
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request, APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks, Query, status, Body
 from fastapi.responses import FileResponse
-
-from app.database.MySQLDatabase import MySQLDatabaseManager
 from app.utils.logging_utils import configure_logging
 from app.api.models.APIResponseModel import ResponseModel, ErrorResponseModel
 from app.database.models import (
@@ -274,16 +272,16 @@ async def task_query(
     - 请求示例：
         ```json
         {
-            "status": "completed",
-            "priority": "normal",
-            "created_after": "2024-01-01T00:00:00",
-            "created_before": "2024-12-31T23:59:59",
-            "language": "",
-            "engine_name": "faster_whisper",
-            "has_result": True,
-            "has_error": False,
-            "limit": 10,
-            "offset": 0
+          "status": "completed",
+          "priority": "normal",
+          "created_after": "",
+          "created_before": "",
+          "language": "",
+          "engine_name": "faster_whisper",
+          "has_result": true,
+          "has_error": false,
+          "limit": 20,
+          "offset": 0
         }
         ```
     - 响应示例：
@@ -346,16 +344,16 @@ async def task_query(
     - Request example:
         ```json
         {
-            "status": "completed",
-            "priority": "normal",
-            "created_after": "2024-01-01T00:00:00",
-            "created_before": "2024-12-31T23:59:59",
-            "language": "",
-            "engine_name": "faster_whisper",
-            "has_result": True,
-            "has_error": False,
-            "limit": 10,
-            "offset": 0
+          "status": "completed",
+          "priority": "normal",
+          "created_after": "",
+          "created_before": "",
+          "language": "",
+          "engine_name": "faster_whisper",
+          "has_result": true,
+          "has_error": false,
+          "limit": 20,
+          "offset": 0
         }
         ```
     - Response example:

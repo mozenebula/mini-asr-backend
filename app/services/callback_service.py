@@ -31,9 +31,9 @@
 
 import traceback
 import datetime
+from tenacity import *
 from typing import Optional, Dict, Union
-from app.database.SqliteDatabase import SqliteDatabaseManager
-from app.database.MySQLDatabase import MySQLDatabaseManager
+from app.database.DatabaseManager import DatabaseManager
 from app.http_client.AsyncHttpClient import BaseAsyncHttpClient
 from app.utils.logging_utils import configure_logging
 from app.database.models import Task
@@ -47,12 +47,15 @@ class CallbackService:
             "User-Agent": "Fast-Powerful-Whisper-AI-Services-API/Callback (https://github.com/Evil0ctal/Fast-Powerful-Whisper-AI-Services-API)"
         }
 
+    # @retry(stop=stop_after_attempt(3), wait=wait_fixed(3))
     async def task_callback_notification(self,
                                          task: Task,
-                                         db_manager: Union[SqliteDatabaseManager, MySQLDatabaseManager],
+                                         db_manager: DatabaseManager,
                                          proxy_settings: Optional[Dict[str, str]] = None,
                                          method: str = "POST",
-                                         headers: Optional[dict] = None) -> None:
+                                         headers: Optional[dict] = None,
+                                         request_timeout: int = 10
+                                         ) -> None:
         """
         发送任务处理结果的回调通知。
 
@@ -63,12 +66,18 @@ class CallbackService:
         :param proxy_settings: 可选的代理设置 | Optional proxy settings
         :param method: 可选的请求方法 | Optional request method
         :param headers: 可选的请求头 | Optional request headers
+        :param request_timeout: 请求超时时间 | Request timeout
         :return: None
         """
-        headers = headers or self.default_headers
         callback_url = task.callback_url
-        try:
-            async with BaseAsyncHttpClient(proxy_settings=proxy_settings, headers=headers) as client:
+        headers = headers or self.default_headers
+        if callback_url:
+            # TODO: 客户端在某些情况下可能会被关闭，需要进一步处理 2024年11月5日01:42:23
+            async with BaseAsyncHttpClient(
+                    proxy_settings=proxy_settings,
+                    headers=headers,
+                    request_timeout=request_timeout
+            ).aclient as client:
                 task_data = await db_manager.get_task(task.id)
                 logger.info(f"Sending task callback notification for task {task.id} to: {callback_url}")
 
@@ -80,20 +89,11 @@ class CallbackService:
                 )
 
                 if response:
-                    logger.info(f"Task callback notification sent successfully with response status: {response.status_code}")
+                    logger.info(
+                        f"Task callback notification sent successfully with response status: {response.status_code}")
                 else:
-                    logger.warning(f"Task callback notification sent, but received empty response for task {task.id}")
-
-                # 更新任务的回调状态码、回调消息和回调时间
-                # Update the task's callback status code, callback message, and callback time
-                await db_manager.update_task_callback_status(
-                    task_id=task.id,
-                    callback_status_code=response.status_code,
-                    callback_message=response.text[:512] if response else None,
-                    callback_time=datetime.datetime.now()
-                )
-
-        except Exception as e:
-            logger.error(f"Error sending task callback notification for task {task.id} to {callback_url}: {str(e)}")
-            logger.debug(traceback.format_exc())
+                    logger.warning(
+                        f"Task callback notification sent, but received empty response for task {task.id}")
+        else:
+            logger.info(f"No callback URL provided for task {task.id}, skipping callback notification.")
 
