@@ -32,13 +32,14 @@
 import asyncio
 import datetime
 import traceback
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict, Union, Any
 from sqlalchemy import select, and_, func, case, inspect
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, AsyncEngine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
 from contextlib import asynccontextmanager
-from app.database.models import Task, Base, QueryTasksOptionalFilter, TaskStatus, TaskPriority, WorkFlow
+from app.database.TaskModels import TaskBase, Task, QueryTasksOptionalFilter, TaskStatus, TaskPriority
+from app.database.WorkFlowModels import WorkFlowBase, Workflow, WorkflowTask, WorkflowNotification
 from app.utils.logging_utils import configure_logging
 
 # 配置日志记录器 | Configure logger
@@ -94,7 +95,6 @@ class DatabaseManager:
         """
         while not self._is_connected:
             try:
-                # 根据数据库类型动态创建引擎 | Dynamically create engine based on database type
                 self._engine = create_async_engine(
                     self.database_url,
                     echo=False,
@@ -107,8 +107,18 @@ class DatabaseManager:
                     class_=AsyncSession
                 )
                 async with self._engine.begin() as conn:
-                    # 自动创建缺失的表 | Automatically create missing tables
-                    await conn.run_sync(Base.metadata.create_all)
+                    # 使用 conn.run_sync 调用 inspect 确认表是否存在
+                    def sync_inspect(connection):
+                        inspector = inspect(connection)
+                        return inspector.get_table_names()
+
+                    existing_tables = await conn.run_sync(sync_inspect)
+
+                    if 'tasks' not in existing_tables:
+                        await conn.run_sync(TaskBase.metadata.create_all)
+                    if 'workflow_workflows' not in existing_tables:
+                        await conn.run_sync(WorkFlowBase.metadata.create_all)
+
                 self._is_connected = True
                 logger.info(f"{self.database_type.upper()} database connected and tables initialized successfully.")
             except OperationalError as e:
@@ -132,19 +142,6 @@ class DatabaseManager:
             await self._connect()
         async with self._session_factory() as session:
             yield session
-
-    async def check_and_create_tables(self) -> None:
-        """
-        检查并创建数据库中缺少的表。
-
-        Check for missing tables in the database and create them if necessary.
-        """
-        async with self._engine.begin() as conn:
-            inspector = inspect(self._engine)
-            tables = inspector.get_table_names()
-            if 'tasks' not in tables:
-                await conn.run_sync(Base.metadata.create_all)
-                logger.info("Missing tables have been created successfully.")
 
     async def add_task(self, task: Task) -> None:
         """
@@ -399,5 +396,62 @@ class DatabaseManager:
         if filters.has_error is not None:
             conditions.append(Task.error_message.isnot(None) if filters.has_error else Task.error_message.is_(None))
         return conditions
+
+    async def create_workflow(self, workflow_data: dict) -> int:
+        """
+        创建一个新的工作流记录并保存到数据库中
+        Create a new workflow record and save it in the database.
+
+        :param workflow_data: 工作流数据字典 | Workflow data dictionary
+        :return: 创建的工作流ID | Created workflow ID
+        """
+        async with self.get_session() as session:
+            try:
+                # 创建 Workflow 实例并映射字段
+                workflow = Workflow(
+                    name=workflow_data["WORKFLOW_NAME"],
+                    description=workflow_data.get("DESCRIPTION", ""),
+                    trigger_type=workflow_data["TRIGGER_TYPE"],
+                    callback_url=workflow_data.get("CALLBACK_URL"),
+                )
+
+                # 添加到会话并提交
+                session.add(workflow)
+                await session.commit()
+                await session.refresh(workflow)  # 刷新获取 ID
+
+                # 添加通知（如果有）
+                if "NOTIFY_ON_COMPLETION" in workflow_data:
+                    notify_data = workflow_data["NOTIFY_ON_COMPLETION"]
+                    notification = WorkflowNotification(
+                        workflow_id=workflow.id,
+                        channel=notify_data["channel"],
+                        recipient=notify_data["recipient"],
+                        message=notify_data["message"]
+                    )
+                    session.add(notification)
+
+                # 处理任务列表
+                for task_data in workflow_data["tasks"]:
+                    task = WorkflowTask(
+                        workflow_id=workflow.id,
+                        task_id=task_data["TASK_ID"],
+                        component=task_data["COMPONENT"],
+                        parameters=task_data.get("PARAMETERS"),
+                        retry_policy=task_data.get("RETRY_POLICY"),
+                        timeout=task_data.get("TIMEOUT"),
+                        condition=task_data.get("CONDITION"),
+                        delay=task_data.get("DELAY")
+                    )
+                    session.add(task)
+                await session.commit()
+
+                return workflow.id
+
+            except SQLAlchemyError as e:
+                logger.error(f"Error creating workflow: {e}")
+                logger.error(traceback.format_exc())
+                await session.rollback()
+                raise
 
 

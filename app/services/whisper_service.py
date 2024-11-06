@@ -29,11 +29,10 @@
 #              `--'   `--'
 # ==============================================================================
 
-import asyncio
 import os
 import traceback
 import uuid
-from typing import Optional, Union
+from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import Request, UploadFile, BackgroundTasks
 from fastapi.responses import FileResponse
@@ -42,8 +41,8 @@ from pydub import AudioSegment
 
 from app.model_pool.AsyncModelPool import AsyncModelPool
 from app.database.DatabaseManager import DatabaseManager
-from app.database.models import Task
-from app.services.task_processor import TaskProcessor
+from app.database.TaskModels import Task
+from app.processors.task_processor import TaskProcessor
 from app.utils.file_utils import FileUtils
 from app.utils.logging_utils import configure_logging
 from config.settings import Settings

@@ -39,7 +39,7 @@ from sqlalchemy import Column, Integer, String, Enum, Text, JSON, Float, DateTim
 from sqlalchemy.ext.declarative import declarative_base
 
 # 定义基础类 | Define Base class
-Base = declarative_base()
+TaskBase = declarative_base()
 
 
 # 定义任务状态的枚举类型 | Define an enum for task status
@@ -87,7 +87,7 @@ class TaskPriority(enum.Enum):
     HIGH = 'high'
 
 
-class Task(Base):
+class Task(TaskBase):
     __tablename__ = 'tasks'
 
     # 任务ID | Task ID
@@ -164,15 +164,6 @@ class Task(Base):
             'output_url': self.output_url,
             'result': self.result
         }
-
-
-class WorkFlow(Base):
-    __tablename__ = 'work_flows'
-
-    # 工作流ID | Work flow ID
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-    # TODO: 完善工作流字段 | Improve work flow fields
 
 
 # 查询任务的可选过滤器 | Query tasks optional filter

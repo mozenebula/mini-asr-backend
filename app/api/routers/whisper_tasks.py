@@ -37,7 +37,7 @@ from fastapi.responses import FileResponse
 from urllib.parse import urlparse
 from app.utils.logging_utils import configure_logging
 from app.api.models.APIResponseModel import ResponseModel, ErrorResponseModel
-from app.database.models import (
+from app.database.TaskModels import (
     TaskStatus,
     TaskStatusHttpCode,
     TaskStatusHttpMessage,

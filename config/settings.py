@@ -28,8 +28,12 @@
 #              )  |  \  `.___________|/    Whisper API Out of the Box (Where is my ⭐?)
 #              `--'   `--'
 # ==============================================================================
-
+import os
 from typing import Optional
+from dotenv import load_dotenv
+
+# 加载 .env 文件 | Load .env file
+load_dotenv()
 
 
 class Settings:
@@ -59,23 +63,23 @@ class Settings:
         # "mysql"：适合大规模项目分布式部署，需要安装 MySQL 数据库 | "mysql": Suitable for large-scale projects distributed deployment, need to install MySQL database
         # 如果你选择 "mysql"，请确保安装了 aiomysql | If you choose "mysql", please make sure aiomysql is installed
         # 如果你选择 "sqlite"，请确保安装了 aiosqlite | If you choose "sqlite", please make sure aiosqlite is installed
-        db_type: str = "sqlite"
+        db_type: str = "mysql"
 
         # SQLite 数据库设置 | SQLite database settings
         # 数据库名字 | Database name
-        sqlite_db_name: str = "whisperserviceapi.db"
+        sqlite_db_name: str = "WhisperServiceAPI.db"
         # 数据库 URL | Database URL
         sqlite_url: str = f"sqlite+aiosqlite:///{sqlite_db_name}"
 
         # MySQL 数据库设置 | MySQL database settings
         # 数据库名字 | Database name
-        mysql_db_name: str = "whisperserviceapi"
+        mysql_db_name: str = os.getenv("mysql_db_name", "")
         # 数据库用户名 | Database username
-        mysql_username: str = "WhisperServiceAPI"
+        mysql_username: str = os.getenv("mysql_username", "")
         # 数据库密码 | Database password
-        mysql_password: str = "pJcjNhDefWPcXndW"
+        mysql_password: str = os.getenv("mysql_password", "")
         # 数据库地址 | Database host
-        mysql_host: str = ""
+        mysql_host: str = os.getenv("mysql_host", "")
         # 数据库端口 | Database port
         mysql_port: int = 3306
         # 数据库 URL | Database URL

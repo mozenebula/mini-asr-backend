@@ -36,7 +36,7 @@ from typing import Optional, Dict, Union
 from app.database.DatabaseManager import DatabaseManager
 from app.http_client.AsyncHttpClient import AsyncHttpClient
 from app.utils.logging_utils import configure_logging
-from app.database.models import Task
+from app.database.TaskModels import Task
 
 logger = configure_logging(__name__)
 
