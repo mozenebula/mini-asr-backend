@@ -37,6 +37,7 @@ load_dotenv()
 
 
 class Settings:
+
     # FastAPI 设置 | FastAPI settings
     class FastAPISettings:
         # 项目名称 | Project name
@@ -49,8 +50,8 @@ class Settings:
         docs_url: str = "/"
         # 是否开启 debug 模式 | Whether to enable debug mode
         debug: bool = False
-        # 自动重载 | Auto reload
-        reload: bool = os.getenv("reload", True)
+        # 当检测到项目代码变动时是否自动重载项目 | Whether to automatically reload the project when changes to the project code are detected
+        reload_on_file_change: bool = os.getenv("RELOAD_ON_FILE_CHANGE", True)
         # FastAPI 服务 IP | FastAPI service IP
         ip: str = "0.0.0.0"
         # FastAPI 服务端口 | FastAPI service port
@@ -63,7 +64,7 @@ class Settings:
         # "mysql"：适合大规模项目分布式部署，需要安装 MySQL 数据库 | "mysql": Suitable for large-scale projects distributed deployment, need to install MySQL database
         # 如果你选择 "mysql"，请确保安装了 aiomysql | If you choose "mysql", please make sure aiomysql is installed
         # 如果你选择 "sqlite"，请确保安装了 aiosqlite | If you choose "sqlite", please make sure aiosqlite is installed
-        db_type: str = os.getenv("db_type", "sqlite")
+        db_type: str = os.getenv("DB_TYPE", "sqlite")
 
         # SQLite 数据库设置 | SQLite database settings
         # 数据库名字 | Database name
@@ -73,13 +74,13 @@ class Settings:
 
         # MySQL 数据库设置 | MySQL database settings
         # 数据库名字 | Database name
-        mysql_db_name: str = os.getenv("mysql_db_name", "")
+        mysql_db_name: str = os.getenv("MYSQL_DB_NAME", "")
         # 数据库用户名 | Database username
-        mysql_username: str = os.getenv("mysql_username", "")
+        mysql_username: str = os.getenv("MYSQL_USERNAME", "")
         # 数据库密码 | Database password
-        mysql_password: str = os.getenv("mysql_password", "")
+        mysql_password: str = os.getenv("MYSQL_PASSWORD", "")
         # 数据库地址 | Database host
-        mysql_host: str = os.getenv("mysql_host", "")
+        mysql_host: str = os.getenv("MYSQL_HOST", "")
         # 数据库端口 | Database port
         mysql_port: int = 3306
         # 数据库 URL | Database URL
@@ -188,3 +189,10 @@ class Settings:
         encoding: str = "utf-8"
         # 日志文件备份数 | Log file backup count
         backup_count: int = 7
+
+    # TikHub.io API 设置 | TikHub.io API settings
+    class TikHubAPISettings:
+        # TikHub.io API URL
+        api_domain: str = "https://api.tikhub.io"
+        # TikHub.io API Token
+        api_key: str = os.getenv("TIKHUB_API_KEY", "")

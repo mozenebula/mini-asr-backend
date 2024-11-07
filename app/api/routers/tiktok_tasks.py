@@ -27,7 +27,6 @@ logger = configure_logging(name=__name__)
 async def create_tiktok_video_task(
         request: Request,
         _TikTokVideoTask: TikTokVideoTask = Form(...),
-        # background_tasks: BackgroundTasks = BackgroundTasks
 ) -> Union[ResponseModel, ErrorResponseModel]:
     """
     # [中文]
@@ -76,7 +75,7 @@ async def create_tiktok_video_task(
             )
         else:
             # $.video.play_addr.url_list.[0]
-            url = data.get("video", {}).get("play_addr", {}).get("url_list", [])[0]
+            url = data.get("video", {}).get("play_addr", {}).get("url_list", [])[-1]
             print(f"Video URL: {url}")
 
         # 创建任务 | Create task
