@@ -4,6 +4,7 @@ aiomysql==0.2.0
 aiosqlite==0.20.0
 annotated-types==0.7.0
 anyio==4.6.2.post1
+asyncmy==0.2.9
 av==12.3.0
 certifi==2024.8.30
 charset-normalizer==3.4.0
@@ -20,6 +21,7 @@ filelock==3.16.1
 filetype==1.2.0
 flatbuffers==24.3.25
 fsspec==2024.10.0
+gmssl==3.2.2
 greenlet==3.1.1
 h11==0.14.0
 httpcore==1.0.6
@@ -46,11 +48,13 @@ portalocker==2.10.1
 proglog==0.1.10
 protobuf==5.28.3
 psutil==6.1.0
+pycryptodomex==3.21.0
 pydantic==2.9.2
 pydantic_core==2.23.4
 pydub==0.25.1
 PyMySQL==1.1.1
 pyreadline3==3.5.4
+python-dotenv==1.0.1
 python-magic==0.4.27
 python-multipart==0.0.12
 pywin32==308
@@ -69,4 +73,3 @@ tqdm==4.66.5
 typing_extensions==4.12.2
 urllib3==2.2.3
 uvicorn==0.32.0
-python-dotenv~=1.0.1
