@@ -54,9 +54,10 @@
 - **创建TikTok任务**：用户可以通过 TikTok 视频链接爬取视频并创建任务。
 - **创建抖音任务**：用户可以通过抖音视频链接爬取视频并创建任务。
 
-## 📸 文档截图
+## 📸 项目截图
 
 
+![2024_07_56_AM.png](https://github.com/Evil0ctal/Fast-Powerful-Whisper-AI-Services-API/blob/main/github/screenshots/2024_07_56_AM.png?raw=true)
 
 ## 🚀 快速部署
 
