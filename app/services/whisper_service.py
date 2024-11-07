@@ -228,6 +228,7 @@ class WhisperService:
             file_name: Optional[str],
             file_url: Optional[str],
             callback_url: Optional[str],
+            platform: Optional[str],
             decode_options: dict,
             task_type: str,
             priority: str,
@@ -242,6 +243,7 @@ class WhisperService:
         :param file_name: 文件名称 | File name
         :param file_url: 文件 URL | File URL
         :param callback_url: 回调 URL | Callback URL
+        :param platform: 平台名称 | Platform name
         :param decode_options: Whisper 解码选项 | Whisper decode options
         :param task_type: Whisper 任务类型 | Whisper task type
         :param priority: 任务优先级 | Task priority
@@ -270,6 +272,7 @@ class WhisperService:
                 file_url=file_url,
                 file_name=file_name,
                 file_size_bytes=file_size_bytes,
+                platform=platform,
                 decode_options=decode_options,
                 file_duration=duration,
                 priority=priority

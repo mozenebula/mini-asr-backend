@@ -4,13 +4,13 @@ from typing import Union
 from fastapi import Request, APIRouter, HTTPException, Form, status
 
 from app.api.models.APIResponseModel import ResponseModel, ErrorResponseModel
-from app.api.models.TikTokTaskRequest import TikTokVideoTask
+from app.api.models.DouyinTaskRequest import DouyinVideoTask
 from app.api.models.WhisperTaskRequest import WhisperTaskFileOption
 from app.api.routers.whisper_tasks import task_create
-from app.crawlers.platforms.tiktok.crawler import TikTokAPPCrawler
+from app.crawlers.platforms.douyin.crawler import DouyinWebCrawler
 from app.utils.logging_utils import configure_logging
 
-TikTokAPPCrawler = TikTokAPPCrawler()
+DouyinWebCrawler = DouyinWebCrawler()
 
 router = APIRouter()
 
@@ -18,7 +18,7 @@ router = APIRouter()
 logger = configure_logging(name=__name__)
 
 
-# 爬取TikTok视频并创建任务 | Crawl TikTok video and create task
+# 爬取抖音视频并创建任务 | Crawl Douyin video and create task
 @router.post("/video_task",
              response_model=ResponseModel,
              summary="创建任务 / Create task",
@@ -26,16 +26,16 @@ logger = configure_logging(name=__name__)
              )
 async def create_tiktok_video_task(
         request: Request,
-        _TikTokVideoTask: TikTokVideoTask = Form(...),
+        _DouyinVideoTask: DouyinVideoTask = Form(...),
 ) -> Union[ResponseModel, ErrorResponseModel]:
     """
     # [中文]
 
     ### 用途说明:
-    - 通过 TikTok 视频链接爬取视频并创建任务。
+    - 通过抖音视频链接爬取视频并创建任务。
 
     ### 请求参数:
-    - `url`: TikTok 视频链接，例如: `https://www.tiktok.com/@taylorswift/video/7359655005701311786`。
+    - `url`: 抖音 视频链接，例如: `https://v.douyin.com/iANRkr9m/`。
     - 其他参数与创建任务时的参数相同。
 
     ### 返回结果:
@@ -43,16 +43,16 @@ async def create_tiktok_video_task(
 
     ### 错误代码说明:
 
-    - `400`: TikTok 视频抓取失败。
+    - `400`: 抖音视频抓取失败。
     - `500`: 未知错误。
 
     # [English]
 
     ### Description:
-    - Crawl the video through the TikTok video link and create a task.
+    - Crawl the video through the Douyin video link and create a task.
 
     ### Request parameters:
-    - `url`: TikTok video link, for example: `https://www.tiktok.com/@taylorswift/video/7359655005701311786`.
+    - `url`: Douyin video link, for example: `https://v.douyin.com/iANRkr9m/`.
     - Other parameters are the same as when creating a task.
 
     ### Return result:
@@ -60,24 +60,24 @@ async def create_tiktok_video_task(
 
     ### Error code description:
 
-    - `400`: TikTok video crawl failed.
+    - `400`: Douyin video crawl failed.
     - `500`: Unknown error.
     """
     try:
-        url = str(_TikTokVideoTask.url)
-        platform = str(_TikTokVideoTask.platform)
-        data = await TikTokAPPCrawler.fetch_one_video_by_url(url)
+        url = str(_DouyinVideoTask.url)
+        platform = str(_DouyinVideoTask.platform)
+        data = await DouyinWebCrawler.fetch_one_video_by_url(url)
 
         if not data:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid TikTok video URL",
-                headers={"X-Error": "Invalid TikTok video URL"}
+                detail="Invalid Douyin video URL",
+                headers={"X-Error": "Invalid Douyin video URL"}
             )
         else:
-            # $.video.play_addr.url_list.[0]
-            url = data.get("video", {}).get("play_addr", {}).get("url_list", [])[-1]
-            # print(f"Video URL: {url}")
+            # $.aweme_detail.video.play_addr.url_list.[2]
+            url = data.get("aweme_detail", {}).get("video", {}).get("play_addr", {}).get("url_list", [])[-1]
+            print(f"Video URL: {url}")
 
         # 创建任务 | Create task
         task_data = WhisperTaskFileOption(file_url=url, platform=platform)

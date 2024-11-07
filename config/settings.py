@@ -190,6 +190,13 @@ class Settings:
         # 日志文件备份数 | Log file backup count
         backup_count: int = 7
 
+    # 抖音 API 设置 | Douyin API settings
+    class DouyinAPISettings:
+        # Douyin Web Cookie
+        web_cookie: str = os.getenv("DOUYIN_WEB_COOKIE", "")
+        # Proxy
+        proxy: str = os.getenv("DOUYIN_PROXY", None)
+
     # TikHub.io API 设置 | TikHub.io API settings
     class TikHubAPISettings:
         # TikHub.io API URL

@@ -96,6 +96,7 @@ async def task_create(
         - 你可以参考接口文档中的回调测试接口在控制台查看回调信息。
         - 例如：`http://localhost/api/whisper/callback/test`
     - `priority` (TaskPriority): 任务优先级，默认为 `TaskPriority.NORMAL`。
+    - `platform` (Optional[str]): 指定平台，例如 'tiktok' 或 'douyin'，用于方便区分不同平台的任务在数据库进行查询和分类，默认为空，可以根据需要自定义。
     - `language` (str): 指定输出语言，例如 'en' 或 'zh'，留空则自动检测。
     - `temperature` (str): 采样温度，可以是单个值或使用英文逗号分隔的多个值，将在后端转换为列表，例如 "0.8,1.0"。
     - `compression_ratio_threshold` (float): 压缩比阈值，默认为 1.8。
@@ -145,6 +146,7 @@ async def task_create(
         - You can view the callback information in the console by referring to the callback test interface in the API documentation.
         - For example: `http://localhost/api/whisper/callback/test`
     - `priority` (TaskPriority): Task priority, default is `TaskPriority.NORMAL`.
+    - `platform` (Optional[str]): Specify the platform, e.g., 'tiktok' or 'douyin', for easy query and classification of tasks from different platforms in the database, default is empty, can be customized according to needs.
     - `language` (str): Specify the output language, e.g., 'en' or 'zh', leave empty for auto-detection.
     - `temperature` (str): Sampling temperature, can be a single value or multiple values separated by commas, which will be converted to a list on the backend, e.g., "0.8,1.0".
     - `compression_ratio_threshold` (float): Compression ratio threshold, default is 1.8.
@@ -224,6 +226,7 @@ async def task_create(
             file_name=file_upload.filename if file_upload else None,
             file_url=task_data.file_url if task_data.file_url else None,
             callback_url=task_data.callback_url,
+            platform=task_data.platform,
             decode_options=decode_options,
             task_type=task_data.task_type,
             priority=task_data.priority,

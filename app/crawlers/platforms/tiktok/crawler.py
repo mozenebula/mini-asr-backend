@@ -71,7 +71,8 @@ class TikTokAPPCrawler:
         """
         return urlencode(model.dict())
 
-    @retry(stop=stop_after_attempt(10), wait=wait_fixed(1))
+    # 获取单个作品数据 (Fetch a single TikTok video data)
+    @retry(stop=stop_after_attempt(10), retry_error_callback=lambda retry_state: retry_state.outcome.result())
     async def fetch_one_video(self, aweme_id: str) -> dict:
         """
         根据视频 ID (aweme_id) 获取单个 TikTok 视频数据 (Fetch a single TikTok video data by video ID)
@@ -96,6 +97,7 @@ class TikTokAPPCrawler:
 
             return video_data
 
+    # 通过URL获取单个作品数据 (Fetch a single TikTok video data by video URL)
     async def fetch_one_video_by_url(self, url: str) -> dict:
         """
         根据视频 URL 获取单个 TikTok 视频数据 (Fetch a single TikTok video data by video URL)

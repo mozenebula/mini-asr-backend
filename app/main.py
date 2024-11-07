@@ -58,7 +58,11 @@ tags_metadata = [
     {
         "name": "TikTok-Tasks",
         "description": "**(TikTok 任务 / TikTok Tasks)**",
-    }
+    },
+    {
+        "name": "Douyin-Tasks",
+        "description": "**(抖音 任务 / Douyin Tasks)**",
+    },
 ]
 
 

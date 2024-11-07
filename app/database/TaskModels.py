@@ -108,6 +108,8 @@ class Task(TaskBase):
     status = Column(Enum(TaskStatus), default=TaskStatus.QUEUED)
     # 检测到的语言 | Detected language
     language = Column(String(10), nullable=True)
+    # 任务对应的平台 | Platform for the task
+    platform = Column(String(50), nullable=True)
     # 引擎名称 | Engine name
     engine_name = Column(String(50), nullable=True)
     # 创建日期 | Creation date
@@ -159,6 +161,7 @@ class Task(TaskBase):
             'file_size_bytes': self.file_size_bytes,
             'file_duration': self.file_duration,
             'language': self.language,
+            'platform': self.platform,
             'decode_options': self.decode_options,
             'error_message': self.error_message,
             'output_url': self.output_url,

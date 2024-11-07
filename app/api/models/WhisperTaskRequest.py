@@ -29,6 +29,10 @@ class WhisperTaskRequest(BaseModel):
         TaskPriority.NORMAL,
         description="任务优先级 / Task priority"
     )
+    platform: Optional[str] = Form(
+        '',
+        description="指定平台，例如 'tiktok' 或 'douyin'，仅用于区分不同平台的任务方便在数据库中存储 / Specify the platform, e.g., 'tiktok' or 'douyin', only used to distinguish tasks from different platforms for storage in the database"
+    )
     language: str = Form(
         "",
         description="指定输出语言，例如 'en' 或 'zh'，留空则自动检测 / Specify the output language, e.g., 'en' or 'zh', leave empty for auto-detection"
