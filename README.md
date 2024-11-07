@@ -2,7 +2,7 @@
 
 ## 本项目还在积极开发和优化中，当前自述文档已过时，请等待下一个版本的更新。
 
-[Chinese](README.md) | [English](README-EN.md)
+[Chinese](README.md) | [English](README-ZH)
 
 欢迎来到 **[Whisper-Speech-to-Text-API](https://github.com/Evil0ctal/Whisper-Speech-to-Text-API)** 项目！本项目为开发者们提供了一个快速、可靠的 API，通过调用 [OpenAI Whisper](https://github.com/openai/whisper) 模型，将多种格式的视频或音频文件高效转换为文本，适合语音识别、字幕生成和文本分析需求。
 
