@@ -28,7 +28,7 @@
 #              )  |  \  `.___________|/    Whisper API Out of the Box (Where is my ⭐?)
 #              `--'   `--'
 # ==============================================================================
-import asyncio
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.api.router import router as api_router
@@ -55,6 +55,10 @@ tags_metadata = [
         "name": "Work-Flows",
         "description": "**(工作流 / Work Flows)**",
     },
+    {
+        "name": "TikTok-Tasks",
+        "description": "**(TikTok 任务 / TikTok Tasks)**",
+    }
 ]
 
 
@@ -65,7 +69,6 @@ async def lifespan(application: FastAPI):
     :param application: FastAPI 应用实例 | FastAPI application instance
     :return: None
     """
-
     # 选择数据库管理器并初始化数据库 | Choose the database manager and initialize the database
     if Settings.DatabaseSettings.db_type == "sqlite":
         database_url = Settings.DatabaseSettings.sqlite_url

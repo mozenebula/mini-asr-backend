@@ -50,7 +50,7 @@ class Settings:
         # 是否开启 debug 模式 | Whether to enable debug mode
         debug: bool = False
         # 自动重载 | Auto reload
-        reload: bool = False
+        reload: bool = os.getenv("reload", True)
         # FastAPI 服务 IP | FastAPI service IP
         ip: str = "0.0.0.0"
         # FastAPI 服务端口 | FastAPI service port
@@ -63,11 +63,11 @@ class Settings:
         # "mysql"：适合大规模项目分布式部署，需要安装 MySQL 数据库 | "mysql": Suitable for large-scale projects distributed deployment, need to install MySQL database
         # 如果你选择 "mysql"，请确保安装了 aiomysql | If you choose "mysql", please make sure aiomysql is installed
         # 如果你选择 "sqlite"，请确保安装了 aiosqlite | If you choose "sqlite", please make sure aiosqlite is installed
-        db_type: str = "mysql"
+        db_type: str = os.getenv("db_type", "sqlite")
 
         # SQLite 数据库设置 | SQLite database settings
         # 数据库名字 | Database name
-        sqlite_db_name: str = "WhisperServiceAPI.db"
+        sqlite_db_name: str = os.getenv("sqlite_db_name", "WhisperServiceAPI.db")
         # 数据库 URL | Database URL
         sqlite_url: str = f"sqlite+aiosqlite:///{sqlite_db_name}"
 

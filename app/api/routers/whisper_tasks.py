@@ -30,20 +30,22 @@
 # ==============================================================================
 
 import traceback
-from typing import Union, List, Optional
-from sqlalchemy.exc import SQLAlchemyError
+from typing import Union
+from urllib.parse import urlparse
+
 from fastapi import Request, APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks, Query, status, Body
 from fastapi.responses import FileResponse
-from urllib.parse import urlparse
-from app.utils.logging_utils import configure_logging
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.api.models.APIResponseModel import ResponseModel, ErrorResponseModel
+from app.api.models.WhisperTaskRequest import WhisperTaskRequest, WhisperTaskFileOption
 from app.database.TaskModels import (
     TaskStatus,
     TaskStatusHttpCode,
     TaskStatusHttpMessage,
-    TaskPriority,
     QueryTasksOptionalFilter
 )
+from app.utils.logging_utils import configure_logging
 
 router = APIRouter()
 
@@ -60,34 +62,11 @@ logger = configure_logging(name=__name__)
 )
 async def task_create(
         request: Request,
-        file: Union[UploadFile, str] = File("",
-                                            description="媒体文件（支持的格式：音频和视频，如 MP3, WAV, MP4, MKV 等） / Media file (supported formats: audio and video, e.g., MP3, WAV, MP4, MKV)"),
-        file_url: Optional[str] = Form("",
-                                       description="媒体文件的 URL 地址 / URL address of the media file"),
-        task_type: str = Form("transcribe",
-                              description="任务类型，默认为 'transcription'，具体取值请参考文档 / Task type, default is 'transcription', refer to the documentation for specific values"),
-        callback_url: Optional[str] = Form("",
-                                           description="回调URL，任务完成时通知客户端 / Callback URL to notify the client when the task is completed"),
-        priority: TaskPriority = Form(TaskPriority.NORMAL, description="任务优先级 / Task priority"),
-        language: str = Form("",
-                             description="指定输出语言，例如 'en' 或 'zh'，留空则自动检测 / Specify the output language, e.g., 'en' or 'zh', leave empty for auto-detection"),
-        temperature: str = Form("0.8,1.0",
-                                description="采样温度，控制输出文本的多样性，可以是单个值或使用逗号分隔的多个值 / Sampling temperature, control the diversity of the output text, can be a single value or multiple values separated by commas"),
-        compression_ratio_threshold: float = Form(1.8, description="压缩比阈值 / Compression ratio threshold"),
-        no_speech_threshold: float = Form(0.6, description="无声部分的概率阈值 / No-speech probability threshold"),
-        condition_on_previous_text: bool = Form(True,
-                                                description="在连续语音中更准确地理解上下文 / Condition on previous text"),
-        initial_prompt: str = Form("", description="初始提示文本 / Initial prompt text"),
-        word_timestamps: bool = Form(False,
-                                     description="是否提取每个词的时间戳信息 / Whether to extract word-level timestamp information"),
-        prepend_punctuations: str = Form("\"'“¿([{-",
-                                         description="前置标点符号集合 / Prepend punctuation characters"),
-        append_punctuations: str = Form("\"'.。,，!！?？:：”)]}、",
-                                        description="后置标点符号集合 / Append punctuation characters"),
-        clip_timestamps: Union[str, List[float]] = Form("0",
-                                                        description="裁剪时间戳 / Clip timestamps to avoid out-of-range issues"),
-        hallucination_silence_threshold: Optional[float] = Form(None,
-                                                                description="幻听静音阈值 / Hallucination silence threshold")
+        file_upload: Union[UploadFile, str, None] = File(
+            None,
+            description="媒体文件（支持的格式：音频和视频，如 MP3, WAV, MP4, MKV 等） / Media file (supported formats: audio and video, e.g., MP3, WAV, MP4, MKV)"
+        ),
+        task_data: WhisperTaskFileOption = Query()
 ):
     """
     # [中文]
@@ -126,7 +105,7 @@ async def task_create(
     - `word_timestamps` (bool): 是否提取每个词的时间戳信息，默认为 False。
     - `prepend_punctuations` (str): 前置标点符号集合，默认为 "\"'“¿([{-"。
     - `append_punctuations` (str): 后置标点符号集合，默认为 "\"'.。,，!！?？:：”)]}、"。
-    - `clip_timestamps` (Union[str, List[float]]): 裁剪时间戳，避免超出范围问题，默认为 "0"。
+    - `clip_timestamps` (str): 裁剪时间戳，避免超出范围问题，默认为 "0"，可以是单个值或使用逗号分隔的多个值。
     - `hallucination_silence_threshold` (Optional[float]): 幻听静音阈值，默认为 None。
 
     ### 返回:
@@ -175,7 +154,7 @@ async def task_create(
     - `word_timestamps` (bool): Whether to extract word-level timestamp information, default is False.
     - `prepend_punctuations` (str): Prepend punctuation characters, default is "\"'“¿([{-".
     - `append_punctuations` (str): Append punctuation characters, default is "\"'.。,，!！?？:：”)]}、".
-    - `clip_timestamps` (Union[str, List[float]]): Clip timestamps to avoid out-of-range issues, default is "0".
+    - `clip_timestamps` (str): Clip timestamps to avoid out-of-range issues, default is "0", can be a single value or multiple values separated by commas.
     - `hallucination_silence_threshold` (Optional[float]): Hallucination silence threshold, default is None.
 
     ### Returns:
@@ -189,7 +168,7 @@ async def task_create(
     """
 
     # 检查文件或文件URL是否为空 | Check if the file or file URL is empty
-    if not (file or file_url):
+    if not (file_upload or task_data.file_url):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ErrorResponseModel(
@@ -197,24 +176,24 @@ async def task_create(
                 message="The file or file_url parameter cannot be empty, you must provide one of them",
                 router=str(request.url),
                 params=dict(request.query_params),
-            ).dict()
+            ).model_dump()
         )
 
     # 检查文件和文件URL是否同时存在 | Check if both file and file URL are provided
-    if file and file_url:
+    if file_upload and task_data.file_url:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ErrorResponseModel(
                 code=status.HTTP_400_BAD_REQUEST,
-                message="The file and file_url parameters cannot be provided at the same time",
+                message="The 'file_upload' and 'file_url' parameters cannot be both provided, you must provide only one of them.",
                 router=str(request.url),
                 params=dict(request.query_params),
-            ).dict()
+            ).model_dump()
         )
 
     # 检查 URL 格式是否正确 | Check if the URL format is correct
-    if file_url:
-        parsed_url = urlparse(file_url)
+    if task_data.file_url:
+        parsed_url = urlparse(task_data.file_url)
         if not parsed_url.scheme or not parsed_url.netloc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -223,41 +202,40 @@ async def task_create(
                     message="The format of the file URL is incorrect",
                     router=str(request.url),
                     params=dict(request.query_params),
-                ).dict()
+                ).model_dump()
             )
 
     try:
         decode_options = {
-            "language": language if language else None,
-            "temperature": [float(temp) for temp in temperature.split(",")] if "," in temperature else float(
-                temperature),
-            "compression_ratio_threshold": compression_ratio_threshold,
-            "no_speech_threshold": no_speech_threshold,
-            "condition_on_previous_text": condition_on_previous_text,
-            "initial_prompt": initial_prompt,
-            "word_timestamps": word_timestamps,
-            "prepend_punctuations": prepend_punctuations,
-            "append_punctuations": append_punctuations,
-            "clip_timestamps": clip_timestamps,
-            "hallucination_silence_threshold": hallucination_silence_threshold
+            "language": task_data.language if task_data.language else None,
+            "temperature": [float(temp) for temp in task_data.temperature.split(",")] if "," in task_data.temperature else float(task_data.temperature),
+            "compression_ratio_threshold": task_data.compression_ratio_threshold,
+            "no_speech_threshold": task_data.no_speech_threshold,
+            "condition_on_previous_text": task_data.condition_on_previous_text,
+            "initial_prompt": task_data.initial_prompt,
+            "word_timestamps": task_data.word_timestamps,
+            "prepend_punctuations": task_data.prepend_punctuations,
+            "append_punctuations": task_data.append_punctuations,
+            "clip_timestamps": [float(clip) for clip in task_data.clip_timestamps.split(",")] if "," in task_data.clip_timestamps else task_data.clip_timestamps,
+            "hallucination_silence_threshold": task_data.hallucination_silence_threshold
         }
         task_info = await request.app.state.whisper_service.create_whisper_task(
-            file=file if file else None,
-            file_name=file.filename if file else None,
-            file_url=file_url if file_url else None,
-            callback_url=callback_url,
+            file_upload=file_upload if file_upload else None,
+            file_name=file_upload.filename if file_upload else None,
+            file_url=task_data.file_url if task_data.file_url else None,
+            callback_url=task_data.callback_url,
             decode_options=decode_options,
-            task_type=task_type,
-            priority=priority,
+            task_type=task_data.task_type,
+            priority=task_data.priority,
             request=request
         )
         return ResponseModel(code=200,
                              router=str(request.url),
                              params={
                                  **decode_options,
-                                 "task_type": task_type,
-                                 "priority": priority,
-                                 "callback_url": callback_url
+                                 "task_type": task_data.task_type,
+                                 "priority": task_data.priority,
+                                 "callback_url": task_data.callback_url
                              },
                              data=task_info.to_dict())
 
@@ -274,7 +252,7 @@ async def task_create(
                 message=f"An unexpected error occurred while creating the transcription task: {str(e)}",
                 router=str(request.url),
                 params=dict(request.query_params),
-            ).dict()
+            ).model_dump()
         )
 
 
@@ -440,7 +418,7 @@ async def task_query(
         return ResponseModel(
             code=200,
             router=str(request.url),
-            params=params.dict(),
+            params=params.model_dump(),
             data=result
         )
 
@@ -457,7 +435,7 @@ async def task_query(
                 message=f"An unexpected error occurred while creating the transcription task: {str(e)}",
                 router=str(request.url),
                 params=dict(request.query_params),
-            ).dict()
+            ).model_dump()
         )
 
 
@@ -516,7 +494,7 @@ async def task_delete(
                     message=TaskStatusHttpMessage.NOT_FOUND.value,
                     router=str(request.url),
                     params=dict(request.query_params),
-                ).dict()
+                ).model_dump()
             )
 
         data = {
@@ -545,7 +523,7 @@ async def task_delete(
                 message="An unexpected error occurred while deleting the task",
                 router=str(request.url),
                 params=dict(request.query_params),
-            ).dict()
+            ).model_dump()
         )
 
 
@@ -608,7 +586,7 @@ async def task_result(
                     message=TaskStatusHttpMessage.NOT_FOUND.value,
                     router=str(request.url),
                     params=dict(request.query_params),
-                ).dict()
+                ).model_dump()
             )
 
         # 任务处于排队中 - 返回202 | Task is queued - return 202
@@ -620,7 +598,7 @@ async def task_result(
                     message=TaskStatusHttpMessage.QUEUED.value,
                     router=str(request.url),
                     params=dict(request.query_params),
-                ).dict()
+                ).model_dump()
             )
         # 任务正在处理中 - 返回202 | Task is processing - return 202
         elif task.status == TaskStatus.PROCESSING:
@@ -631,7 +609,7 @@ async def task_result(
                     message=TaskStatusHttpMessage.PROCESSING.value,
                     router=str(request.url),
                     params=dict(request.query_params),
-                ).dict()
+                ).model_dump()
             )
         # 任务失败 - 返回500 | Task failed - return 500
         elif task.status == TaskStatus.FAILED:
@@ -642,7 +620,7 @@ async def task_result(
                     message=TaskStatusHttpMessage.FAILED.value,
                     router=str(request.url),
                     params=dict(request.query_params),
-                ).dict()
+                ).model_dump()
             )
 
         # 任务已完成 - 返回200 | Task is completed - return 200
@@ -663,7 +641,7 @@ async def task_result(
                 message=TaskStatusHttpMessage.SERVICE_UNAVAILABLE.value,
                 router=str(request.url),
                 params=dict(request.query_params),
-            ).dict()
+            ).model_dump()
         )
 
     except HTTPException as http_error:
@@ -680,7 +658,7 @@ async def task_result(
                 message=f"An unexpected error occurred while retrieving the task result: {str(e)}",
                 router=str(request.url),
                 params=dict(request.query_params),
-            ).dict()
+            ).model_dump()
         )
 
 
@@ -1243,7 +1221,7 @@ async def callback_test(
                 message=f"An unexpected error occurred while testing the callback interface: {str(e)}",
                 router=str(request.url),
                 params=dict(request.query_params),
-            ).dict()
+            ).model_dump()
         )
 
 
@@ -1328,7 +1306,7 @@ async def extract_audio(
                 message=f"An unexpected error occurred while extracting audio from the video file: {str(e)}",
                 router=str(request.url),
                 params=dict(request.query_params),
-            ).dict()
+            ).model_dump()
         )
 
 
@@ -1388,7 +1366,7 @@ async def generate_subtitles(
                 message=TaskStatusHttpMessage.NOT_FOUND.value,
                 router=str(request.url),
                 params=dict(request.query_params),
-            ).dict()
+            ).model_dump()
         )
 
     if task.status != TaskStatus.COMPLETED:
@@ -1399,7 +1377,7 @@ async def generate_subtitles(
                 message="This task is not available for generating subtitles.",
                 router=str(request.url),
                 params=dict(request.query_params),
-            ).dict()
+            ).model_dump()
         )
 
     try:
@@ -1423,5 +1401,5 @@ async def generate_subtitles(
                 message=f"An unexpected error occurred while generating subtitles: {str(e)}",
                 router=str(request.url),
                 params=dict(request.query_params),
-            ).dict()
+            ).model_dump()
         )

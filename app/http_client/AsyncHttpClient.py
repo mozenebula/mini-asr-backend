@@ -158,7 +158,7 @@ class AsyncHttpClient:
                     await asyncio.sleep(backoff)
                     backoff *= 2  # Exponential backoff
                     continue
-                response.raise_for_status()
+                # response.raise_for_status()
                 return response
 
             except httpx.RequestError as req_err:

@@ -32,14 +32,15 @@
 # ==============================================================================
 
 import asyncio
+import re
 import time
 from urllib.parse import urlencode
 
 from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-from app.crawlers.platforms.example_tiktok.endpoints import TikTokAPIEndpoints
-from app.crawlers.platforms.example_tiktok.models import FeedVideoDetail
+from app.crawlers.platforms.tiktok.endpoints import TikTokAPIEndpoints
+from app.crawlers.platforms.tiktok.models import FeedVideoDetail
 from app.http_client.AsyncHttpClient import AsyncHttpClient
 
 
@@ -95,12 +96,46 @@ class TikTokAPPCrawler:
 
             return video_data
 
+    async def fetch_one_video_by_url(self, url: str) -> dict:
+        """
+        根据视频 URL 获取单个 TikTok 视频数据 (Fetch a single TikTok video data by video URL)
+
+        :param url: 视频 URL | Video URL
+        :return: 视频数据 (Video data)
+        """
+        # 解析 URL 中的视频 ID (Parse video ID from URL)
+        headers = self.get_tiktok_headers()
+        async with AsyncHttpClient(headers=headers) as client:
+            response = await client.fetch_response(url)
+            url = response.headers.get("location", url)
+
+            # 预编译正则表达式
+            _TIKTOK_AWEMEID_PATTERN = re.compile(r"video/(\d+)")
+            _TIKTOK_PHOTOID_PATTERN = re.compile(r"photo/(\d+)")
+            _TIKTOK_NOTFOUND_PATTERN = re.compile(r"notfound")
+
+            # 匹配视频 ID (Match video ID)
+            video_match = _TIKTOK_AWEMEID_PATTERN.search(str(url))
+            photo_match = _TIKTOK_PHOTOID_PATTERN.search(str(url))
+
+            if not video_match and not photo_match:
+                raise ValueError("Invalid video URL (视频 URL 错误)")
+
+            aweme_id = video_match.group(1) if video_match else photo_match.group(1)
+
+        # 调用 fetch_one_video 方法获取视频数据 (Call fetch_one_video method to fetch video data)
+        return await self.fetch_one_video(aweme_id)
+
     async def main(self):
         """
         主函数，用于测试获取单个作品数据 (Main function for testing single video data fetch)
         """
         aweme_id = "7339393672959757570"
         response = await self.fetch_one_video(aweme_id)
+        print(response)
+
+        awe_url = "https://www.tiktok.com/t/ZTFcVgx4P/"
+        response = await self.fetch_one_video_by_url(awe_url)
         print(response)
 
 

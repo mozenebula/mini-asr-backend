@@ -31,9 +31,8 @@
 
 from fastapi import APIRouter
 from app.api.routers import (
-    health_check,
-    whisper_tasks,
-    work_flows
+    health_check, whisper_tasks,
+    work_flows, tiktok_tasks
 )
 
 router = APIRouter()
@@ -46,3 +45,6 @@ router.include_router(whisper_tasks.router, prefix="/whisper", tags=["Whisper-Ta
 
 # Work Flow routers
 router.include_router(work_flows.router, prefix="/workflow", tags=["Work-Flows"])
+
+# TikTok Task API routers
+router.include_router(tiktok_tasks.router, prefix="/tiktok", tags=["TikTok-Tasks"])

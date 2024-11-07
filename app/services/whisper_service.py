@@ -224,7 +224,7 @@ class WhisperService:
 
     async def create_whisper_task(
             self,
-            file: Optional[UploadFile],
+            file_upload: Optional[UploadFile],
             file_name: Optional[str],
             file_url: Optional[str],
             callback_url: Optional[str],
@@ -238,7 +238,7 @@ class WhisperService:
 
         Create a Whisper task and save it to the database.
 
-        :param file: FastAPI 上传的文件对象 | FastAPI uploaded file object
+        :param file_upload: FastAPI 上传的文件对象 | FastAPI uploaded file object
         :param file_name: 文件名称 | File name
         :param file_url: 文件 URL | File URL
         :param callback_url: 回调 URL | Callback URL
@@ -251,8 +251,8 @@ class WhisperService:
 
         # 如果file是UploadFile对象或者bytes对象，那么就保存到临时文件夹，然后返回临时文件路径
         # If file is an UploadFile object or bytes object, save it to the temporary folder and return the temporary file path
-        if file:
-            temp_file_path = await self.file_utils.save_uploaded_file(file=file, file_name=file_name)
+        if file_upload:
+            temp_file_path = await self.file_utils.save_uploaded_file(file=file_upload, file_name=file_name)
             self.logger.debug(f"Saved uploaded file to temporary path: {temp_file_path}")
             duration = await self.file_utils.get_audio_duration(temp_file_path)
             file_size_bytes = os.path.getsize(temp_file_path)
