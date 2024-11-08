@@ -200,6 +200,151 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
   * `python3 start.py`
 * You can then access `http://localhost` to view the API documentation and test the endpoints on the web.
 
+## 🧵 Directory Structure Overview
+
+### Introduction:
+
+> If you're interested in contributing to this project, I recommend starting with this section to quickly understand the project’s design and the role of each module. The project code includes comprehensive bilingual (Chinese and English) comments, internal explanations, and variable descriptions, with `Typing` annotations throughout. While it's not perfect, I’ve aimed for clarity and elegance to make it easy to follow. I hope everyone also takes the chance to learn asynchronous programming, offers optimization suggestions, and together, we can improve the project to be more efficient and robust!
+
+#### 📁 `app/api/` - API Layer
+
+* **Tech Stack** : Built with the FastAPI framework, providing a high-performance, scalable routing system for API requests.
+* **Features** :
+  * **APIResponseModel.py** : Defines data models using Pydantic, ensuring consistency in API response structures.
+  * **routers/** : Manages API endpoints for various functional modules:
+    * `health_check.py` 💓: Quickly checks system health to monitor status.
+    * `whisper_tasks.py` 📝: Routes for managing Whisper-related tasks, supporting task creation, querying, deletion, and more.
+    * `work_flows.py` 🔄: Routes for workflow management, offering CRUD interfaces for workflows, with future plans for event-driven automated workflows.
+
+#### 📁 `app/crawlers/` - Asynchronous Crawler Module
+
+* **Tech Stack** : Uses `httpx` for asynchronous HTTP requests and Pydantic models for data validation.
+* **Features** :
+  * **platforms/** contains dedicated modules for platforms like Douyin and TikTok:
+    * **douyin/** 🕸️: Handles Douyin video fetching, data extraction, and API integration, including custom models and utility classes.
+    * **tiktok/** 🕹️: Supports TikTok data fetching and API data display, with plans to extend support to other social media platforms.
+* **Problem-Solving** : Provides automated data scraping capabilities, integrating with the Whisper model for end-to-end media data processing.
+
+#### 📁 `app/database/` - Database Management Module
+
+* **Tech Stack** :
+  * Utilizes `SQLAlchemy` with asynchronous support and `AsyncSession` for CRUD operations.
+  * Supports `MySQL` and `SQLite` connections, with automatic reconnection, table checks, and initialization.
+  * Integrates custom logging and error handling for reliable database operations.
+* **Features** :
+  * **DatabaseManager** 🗄️: Manages database connections and task CRUD operations, supporting complex queries and batch processing.
+    * **Database Connection and Initialization** : Uses `_connect` for automatic retry and dynamic table checks, creating required tables on first connection.
+    * **Task Management** : Flexible task management with methods like `add_task`, `get_task`, `update_task`, and `delete_task`, supporting asynchronous batch operations.
+    * **Query and Filtering** : `query_tasks` method filters tasks based on conditions, with pagination and a condition builder `_build_query_conditions` for flexible querying.
+    * **Callback Status Update** : `update_task_callback_status` method updates task callback information, including status code, message, and callback time.
+    * **Workflow Management** : Supports workflow creation and management (`Workflow`), including tasks and notifications for automation flows.
+* **Problem-Solving** :
+  * **Reliable Database Connection** : Automatic retry and asynchronous context manager (`get_session`) for stable session management, solving disconnection and connection failure issues.
+  * **Efficient Batch Operations** : Supports batch updates and deletions, suitable for large-scale task processing to reduce database interactions and improve efficiency.
+  * **Flexible Task Querying** : Supports complex conditional querying with pagination, allowing the manager to meet diverse data access needs, facilitating project management and query optimization.
+
+#### 📁 `app/http_client/` - Asynchronous HTTP Client Module
+
+* **Tech Stack** :
+  * Uses `httpx` for a high-performance asynchronous HTTP client, with proxy configuration, retry mechanism, and concurrency limits.
+  * Custom exception handling for fine-grained error management based on HTTP status codes.
+  * Implements network request optimizations like retry, backoff, and rate limiting.
+* **Features** :
+  * **AsyncHttpClient** 🌐: Provides a robust asynchronous HTTP client tool with:
+    * **Request and Data Retrieval** : Supports common HTTP requests (`GET`, `POST`, `HEAD`), with `fetch_get_json` and `fetch_post_json` methods returning structured JSON data.
+    * **File Download Support** : `download_file` method asynchronously downloads files, supporting large file chunking with detailed monitoring and error handling.
+    * **Automatic Retry and Backoff** : `fetch_data` method offers exponential backoff for specific HTTP statuses, with customizable retry count for resilient network requests.
+    * **Error Handling and Custom Exceptions** : Custom exceptions based on HTTP status for automated error type detection and logging, simplifying debugging and tracing.
+    * **Proxy and Concurrency Management** : Dynamic proxy configuration and concurrency control, ensuring stability and control under heavy load.
+* **Problem-Solving** :
+  * **Network Request Optimization** : Automatically handles network interruptions and service unavailability with retry and backoff mechanisms for high availability.
+  * **High-Concurrency Support** : Controls concurrency with `asyncio.Semaphore` to prevent overload, ensuring client stability under high-concurrency conditions.
+  * **Configurable and Flexible Usage** : Context manager for resource release, dynamic headers for different APIs, and customizable proxy and timeout settings for adaptability.
+
+#### 📁 `app/model_pool/` - Asynchronous Model Pool Module
+
+* **Tech Stack** :
+  * Combines `asyncio` with `concurrent.futures` to manage GPU and CPU model instances.
+  * Thread-safe singleton design for `AsyncModelPool` to avoid resource competition in multi-threaded environments.
+  * Device allocation and pool size optimization based on system hardware resources (e.g., GPU count and CPU threads).
+* **Features** :
+  * **AsyncModelPool** 🧠: A thread-safe, dynamically adjustable model pool management system with:
+    * **Device Allocation and Dynamic Creation** : Automatically assigns devices based on GPU/CPU configuration, supporting multi-GPU concurrency with instance limits for efficient resource use.
+    * **Initialization and Bulk Loading** : Asynchronous bulk loading for models through `initialize_pool`, reducing concurrent loading conflicts.
+    * **Model Instance Acquisition and Return** : `get_model` and `return_model` methods for concurrent access and return, with options for “existing instance” and “dynamic creation.”
+    * **Health Check and Destruction** : `_is_model_healthy` and `_destroy_model` ensure model health before use and resource cleanup after destruction to prevent memory leaks.
+    * **Pool Size Adjustment** : `resize_pool` allows dynamic pool size changes, adding or removing instances based on load; further intelligent resizing logic is planned.
+* **Problem-Solving** :
+  * **Hardware Resource Optimization** : Dynamically adjusts pool size to prevent resource wastage and over-allocation, ensuring model instance count matches actual hardware configuration.
+  * **Multi-Task Concurrency** : Efficient model instance allocation for multi-task requests, supporting GPU concurrency with instance limits to avoid resource competition.
+  * **Automatic Fault Detection and Handling** : Health check and error handling for damaged/unavailable instances, maintaining stability within the pool.
+
+#### 📁 `app/processors/` - Task and Workflow Processing Module
+
+* **Tech Stack** :
+  * Asynchronous processing with `asyncio`, combining thread pools and queues for concurrent task management. Uses `concurrent.futures` for threading efficiency.
+  * Coordinates database and file operations for consistency and efficient resource usage under high concurrency.
+* **Features** :
+  * **task_processor.py** 📋: Implements background processing logic for Whisper tasks, with multi-queue design, event loop management, priority scheduling, parallel processing, database updates, and file operations.
+    * **Task Queue and Priority Scheduling** : Multiple queues separate task types (e.g., cleanup, callbacks) with priority scheduling from database pulls, ensuring priority tasks are processed first.
+    * **Parallel Task Processing** : Uses `_process_multiple_tasks` with thread pool to handle multiple tasks concurrently, improving throughput.
+    * **Event Loop Management** : `run_loop` method starts the background event loop, continuously monitoring and processing task queues.
+  * **workflow_processor.py** 🔄: Manages complex workflows with custom task dependencies, conditional checks, and automated scheduling; future plans include event-driven workflows.
+* **Problem-Solving** :
+  * **High-Concurrency Processing** : Combines event loop and threading for high-throughput, low-latency task processing under high load.
+  * **Task Separation and Priority Support** : Multi-queue and priority scheduling ensure independent handling of different task types, with priority tasks processed first for enhanced responsiveness.
+  * **Resource Optimization** : Effective GPU, database, and file storage management with `AsyncModelPool`, ensuring smooth processing of large-scale tasks.
+
+#### 📁 `app/services/` - Service Layer Module
+
+* **Tech Stack** :
+  * Asynchronous service with `FastAPI` and `asyncio`, supporting audio processing, transcription, callback handling, and workflow control.
+  * Integrates `pydub` and `moviepy` for audio and video processing, with `ThreadPoolExecutor` and `BackgroundTasks` for concurrent file processing and background tasks.
+* **Features** :
+  * **WhisperService** 🗣️: Manages audio extraction, transcription task creation, and subtitle generation.
+    * **Audio Extraction** : `extract_audio_from_video` extracts audio from videos (WAV or MP3), with auto-cleanup of temporary files.
+    * **Transcription Task Creation** : `create_whisper_task` accepts files or URLs, creates transcription tasks, and saves them to the database, generating output links.
+    * **Subtitle Generation** : `generate_subtitle` converts transcription results to subtitle files (SRT or VTT), deleting temporary files upon completion.
+  * **CallbackService** 📞: Handles callback notifications for tasks, sending results to predefined URLs and recording status.
+    * **Callback Notification** : Uses `task_callback_notification` to send task results to callback URL after completion, logging response status.
+    * **Retry Mechanism** : Supports failure retries with exponential backoff, ensuring reliable notification delivery.
+  * **WorkflowService** 🔄 (Planned): Manages complex automated workflows.
+    * **Workflow Control** : Plans to manage and execute dependent tasks with `WorkflowService`, supporting conditional logic, task dependencies, and callback management for automated bulk tasks.
+    * **Task Coordination and Status Tracking** : Future plans include task status tracking and conditional controls, allowing flexible workflow designs.
+    * **Extensibility** : Supports custom workflow steps and component configuration for adaptable workflows to fit business needs.
+* **Problem-Solving** :
+  * **Efficient Task Handling and Callback Notification** : Uses `TaskProcessor` for concurrent task processing and `CallbackService` for reliable post-completion notifications.
+  * **Flexible Workflow and Extension Support** : `WorkflowService` offers a forward-looking framework, enabling users to manage and monitor task sequences and dependencies flexibly.
+  * **Resource Management and File Cleanup** : `BackgroundTasks` allows for asynchronous file handling and cleanup, optimizing resource management for an efficient file processing experience.
+
+#### 📁 `app/utils/` - Utility Module
+
+* **Tech Stack** : Python native file handling and logging modules, with `aiofiles` for efficient asynchronous file handling and `ConcurrentRotatingFileHandler` for concurrent-safe log rotation.
+* **Features** :
+  * **file_utils.py** 📂: Provides file download, save, delete, and cleanup operations with file size limits and type checks for secure file handling, ideal for high-concurrency scenarios.
+  * **logging_utils.py** 📊: Configures project logging with file and console output, log level control, auto-rotation (10MB), and backups for debugging and long-term storage.
+* **Problem-Solving** :
+  * **Resource Management** : Cleans up temporary files via asynchronous context manager and auto-delete mechanism, preventing resource leaks for system stability.
+  * **File Security and Permission Control** : Strict file size, type, and permission controls to prevent unauthorized access and resource misuse.
+  * **Concurrency Optimization** : Controls file operation concurrency using semaphores to improve I/O performance.
+  * **Log Rotation and Security** : Ensures log output consistency and stability in high-concurrency environments with rotation and multi-process support for robust logging.
+
+#### 📁 `app/workflows/` - Workflow Components (In Progress)
+
+* **Tech Stack** : Python custom component design, with future support for task flow configuration based on JSON or custom Python.
+* **Features** :
+  * **components/** : Component modules to extend workflow functionality.
+    * `base_component.py` 🛠️: Base class for workflow components, supporting general methods and events.
+    * `component_a.py`, `component_b.py`: Examples of custom workflow components with extensible functionality.
+* **Problem-Solving** : Highly extensible component design, allowing users to define complex task flows and custom components according to business needs.
+
+#### 📄 `config/settings.py` - Configuration File
+
+* **Tech Stack** : Uses `dotenv` for environment variable parsing, configuring FastAPI, database, and model pool parameters.
+* **Features** :
+  * Centralizes project configuration for easy management of database, model pool, and service addresses.
+* **Problem-Solving** : Enhances configuration flexibility for quick switching between local and production setups.
+
 ## 🍱 API Usage Examples
 
 * Adding a TikTok task (CURL Format)
