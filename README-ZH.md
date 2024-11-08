@@ -194,9 +194,9 @@
 - `python3 start.py`
 - 随后你可以访问`http://localhost`来查看接口文档，并且在网页上测试。
 
-## 🍱 接口使用示例（CURL格式）
+## 🍱 接口使用示例
 
-- 添加一个TikTok任务
+- 添加一个TikTok任务（CURL格式）
 
 ```curl
 curl -X 'POST' \
@@ -206,34 +206,169 @@ curl -X 'POST' \
   -d 'priority=normal&prepend_punctuations=%22'\''%E2%80%9C%C2%BF(%5B%7B-&no_speech_threshold=0.6&clip_timestamps=0&url=https%3A%2F%2Fwww.tiktok.com%2F%40taylorswift%2Fvideo%2F7359655005701311786&word_timestamps=false&platform=tiktok&temperature=0.8%2C1.0&task_type=transcribe&callback_url=&hallucination_silence_threshold=0&language=&condition_on_previous_text=true&compression_ratio_threshold=1.8&append_punctuations=%22'\''.%E3%80%82%2C%EF%BC%8C!%EF%BC%81%3F%EF%BC%9F%3A%EF%BC%9A%E2%80%9D)%5D%7D%E3%80%81&initial_prompt='
 ```
 
-- 响应
+- 添加一个TikTok任务（Python代码）
 
-```json
+```python
+# pip install httpx
+import httpx
+
+url = "http://127.0.0.1/api/tiktok/video_task"
+tiktok_url = "https://www.tiktok.com/@taylorswift/video/7359655005701311786"
+
+# Define the form data as a dictionary
+data = {
+    "url": tiktok_url,
+    "priority": "normal",
+    "prepend_punctuations": '"\'“¿([{-',
+    "no_speech_threshold": "0.6",
+    "clip_timestamps": "0",
+    "word_timestamps": "false",
+    "platform": "tiktok",
+    "temperature": "0.8,1.0",
+    "task_type": "transcribe",
+    "callback_url": "",
+    "hallucination_silence_threshold": "0",
+    "language": "",
+    "condition_on_previous_text": "true",
+    "compression_ratio_threshold": "1.8",
+    "append_punctuations": '"\'.。,!！?？:：”)]}、',
+    "initial_prompt": ""
+}
+
+
+async def make_request():
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, data=data)
+        print(response.json())
+
+
+if __name__ == "__main__":
+    # To run the async function
+    import asyncio
+    # Run the async function
+    asyncio.run(make_request())
+```
+
+- 请求响应
+
+<div><details><summary>🔎点击展开请求响应</summary>
+<pre><code class="json">
+{
+   "code":200,
+   "router":"http://127.0.0.1/api/tiktok/video_task",
+   "params":{
+      "language":null,
+      "temperature":[
+         0.8,
+         1
+      ],
+      "compression_ratio_threshold":1.8,
+      "no_speech_threshold":0.6,
+      "condition_on_previous_text":true,
+      "initial_prompt":"",
+      "word_timestamps":false,
+      "prepend_punctuations":"\"'“¿([{-",
+      "append_punctuations":"\"'.。,，!！?？:：”)]}、",
+      "clip_timestamps":"0.0",
+      "hallucination_silence_threshold":null,
+      "task_type":"transcribe",
+      "priority":"normal",
+      "callback_url":""
+   },
+   "data":{
+      "id":1,
+      "status":"queued",
+      "callback_url":"",
+      "callback_status_code":null,
+      "callback_message":null,
+      "callback_time":null,
+      "priority":"normal",
+      "engine_name":"faster_whisper",
+      "task_type":"transcribe",
+      "created_at":"2024-11-07T16:43:32.768883",
+      "updated_at":"2024-11-07T16:43:32.768883",
+      "task_processing_time":null,
+      "file_path":null,
+      "file_url":"https://api.tiktokv.com/aweme/v1/play/?file_id=3146fc434e4d493c93b78566726b9310&is_play_url=1&item_id=7359655005701311786&line=0&signaturev3=dmlkZW9faWQ7ZmlsZV9pZDtpdGVtX2lkLjA3YTkzYjY0ZTliOWUzMzVmN2VhODgxMTMyMDljYTJk&source=FEED&vidc=useast5&video_id=v12044gd0000cohbuanog65ltpj9jdpg",
+      "file_name":null,
+      "file_size_bytes":null,
+      "file_duration":null,
+      "language":null,
+      "platform":"tiktok",
+      "decode_options":{
+         "language":null,
+         "temperature":[
+            0.8,
+            1
+         ],
+         "compression_ratio_threshold":1.8,
+         "no_speech_threshold":0.6,
+         "condition_on_previous_text":true,
+         "initial_prompt":"",
+         "word_timestamps":false,
+         "prepend_punctuations":"\"'“¿([{-",
+         "append_punctuations":"\"'.。,，!！?？:：”)]}、",
+         "clip_timestamps":"0.0",
+         "hallucination_silence_threshold":null
+      },
+      "error_message":null,
+      "output_url":"http://127.0.0.1/api/whisper/tasks/result?task_id=1",
+      "result":null
+   }
+}
+</code></pre>
+</details></div>
+
+**在请求体中包含音频或视频文件，API 将返回转录的文本结果。**
+
+- 获取任务结果（CURL格式）
+
+```curl
+curl -X 'GET' \
+  'http://127.0.0.1/api/whisper/tasks/result?task_id=1' \
+  -H 'accept: application/json'
+```
+
+- 获取任务结果（Python代码）
+
+```python
+# pip install httpx
+import httpx
+
+url = "http://127.0.0.1/api/whisper/tasks/result"
+task_id = 1
+
+params = {
+    "task_id": task_id
+}
+
+
+async def make_request():
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, params=params)
+        print(response.json())
+
+
+if __name__ == "__main__":
+    # To run the async function
+    import asyncio
+    # Run the async function
+    asyncio.run(make_request())
+```
+
+- 请求响应
+
+<div><details><summary>🔎点击展开请求响应</summary>
+<pre><code class="json">
 {
   "code": 200,
-  "router": "http://127.0.0.1/api/tiktok/video_task",
+  "router": "http://127.0.0.1/api/whisper/tasks/result?task_id=1",
   "params": {
-    "language": null,
-    "temperature": [
-      0.8,
-      1
-    ],
-    "compression_ratio_threshold": 1.8,
-    "no_speech_threshold": 0.6,
-    "condition_on_previous_text": true,
-    "initial_prompt": "",
-    "word_timestamps": false,
-    "prepend_punctuations": "\"'“¿([{-",
-    "append_punctuations": "\"'.。,，!！?？:：”)]}、",
-    "clip_timestamps": "0.0",
-    "hallucination_silence_threshold": null,
-    "task_type": "transcribe",
-    "priority": "normal",
-    "callback_url": ""
+    "task_id": "1"
   },
   "data": {
-    "id": 8,
-    "status": "queued",
+    "id": 1,
+    "status": "completed",
     "callback_url": "",
     "callback_status_code": null,
     "callback_message": null,
@@ -241,15 +376,15 @@ curl -X 'POST' \
     "priority": "normal",
     "engine_name": "faster_whisper",
     "task_type": "transcribe",
-    "created_at": "2024-11-07T06:31:57.894804",
-    "updated_at": "2024-11-07T06:31:57.894804",
-    "task_processing_time": null,
-    "file_path": null,
+    "created_at": "2024-11-07T16:43:33",
+    "updated_at": "2024-11-07T16:43:33",
+    "task_processing_time": 6.20258,
+    "file_path": "C:\\Users\\Evil0ctal\\PycharmProjects\\Fast-Powerful-Whisper-AI-Services-API\\temp_files\\5accc0958ec7476e81d06f8c3897d768.mp4",
     "file_url": "https://api.tiktokv.com/aweme/v1/play/?file_id=3146fc434e4d493c93b78566726b9310&is_play_url=1&item_id=7359655005701311786&line=0&signaturev3=dmlkZW9faWQ7ZmlsZV9pZDtpdGVtX2lkLjA3YTkzYjY0ZTliOWUzMzVmN2VhODgxMTMyMDljYTJk&source=FEED&vidc=useast5&video_id=v12044gd0000cohbuanog65ltpj9jdpg",
     "file_name": null,
-    "file_size_bytes": null,
-    "file_duration": null,
-    "language": null,
+    "file_size_bytes": 2401593,
+    "file_duration": 30.071,
+    "language": "en",
     "platform": "tiktok",
     "decode_options": {
       "language": null,
@@ -257,24 +392,676 @@ curl -X 'POST' \
         0.8,
         1
       ],
-      "compression_ratio_threshold": 1.8,
-      "no_speech_threshold": 0.6,
-      "condition_on_previous_text": true,
       "initial_prompt": "",
-      "word_timestamps": false,
-      "prepend_punctuations": "\"'“¿([{-",
-      "append_punctuations": "\"'.。,，!！?？:：”)]}、",
       "clip_timestamps": "0.0",
+      "word_timestamps": false,
+      "append_punctuations": "\"'.。,，!！?？:：”)]}、",
+      "no_speech_threshold": 0.6,
+      "prepend_punctuations": "\"'“¿([{-",
+      "condition_on_previous_text": true,
+      "compression_ratio_threshold": 1.8,
       "hallucination_silence_threshold": null
     },
     "error_message": null,
-    "output_url": "http://127.0.0.1/api/whisper/tasks/result?task_id=8",
-    "result": null
+    "output_url": "http://127.0.0.1/api/whisper/tasks/result?task_id=1",
+    "result": {
+      "info": {
+        "duration": 30.07125,
+        "language": "en",
+        "vad_options": null,
+        "all_language_probs": [
+          [
+            "en",
+            0.986328125
+          ],
+          [
+            "es",
+            0.0013828277587890625
+          ],
+          [
+            "ja",
+            0.00125885009765625
+          ],
+          [
+            "fr",
+            0.0012197494506835938
+          ],
+          [
+            "de",
+            0.0010852813720703125
+          ],
+          [
+            "la",
+            0.0010519027709960938
+          ],
+          [
+            "zh",
+            0.00089263916015625
+          ],
+          [
+            "pt",
+            0.0008320808410644531
+          ],
+          [
+            "ko",
+            0.000751495361328125
+          ],
+          [
+            "cy",
+            0.000751495361328125
+          ],
+          [
+            "ru",
+            0.00074005126953125
+          ],
+          [
+            "nn",
+            0.0005245208740234375
+          ],
+          [
+            "sv",
+            0.00036072731018066406
+          ],
+          [
+            "it",
+            0.0002853870391845703
+          ],
+          [
+            "vi",
+            0.00024580955505371094
+          ],
+          [
+            "tr",
+            0.0002310276031494141
+          ],
+          [
+            "nl",
+            0.00017440319061279297
+          ],
+          [
+            "pl",
+            0.00015997886657714844
+          ],
+          [
+            "jw",
+            0.0001480579376220703
+          ],
+          [
+            "hi",
+            0.00012755393981933594
+          ],
+          [
+            "ar",
+            0.00012362003326416016
+          ],
+          [
+            "km",
+            0.00012362003326416016
+          ],
+          [
+            "fi",
+            0.0001189112663269043
+          ],
+          [
+            "id",
+            0.0001170635223388672
+          ],
+          [
+            "haw",
+            0.00009781122207641602
+          ],
+          [
+            "th",
+            0.00009119510650634766
+          ],
+          [
+            "hu",
+            0.00007158517837524414
+          ],
+          [
+            "tl",
+            0.000056624412536621094
+          ],
+          [
+            "el",
+            0.00005316734313964844
+          ],
+          [
+            "no",
+            0.000051975250244140625
+          ],
+          [
+            "ms",
+            0.00003892183303833008
+          ],
+          [
+            "cs",
+            0.00003802776336669922
+          ],
+          [
+            "ro",
+            0.00003129243850708008
+          ],
+          [
+            "ta",
+            0.00002312660217285156
+          ],
+          [
+            "mi",
+            0.000023066997528076172
+          ],
+          [
+            "da",
+            0.000020802021026611328
+          ],
+          [
+            "br",
+            0.000020503997802734375
+          ],
+          [
+            "si",
+            0.00001800060272216797
+          ],
+          [
+            "sn",
+            0.000017702579498291016
+          ],
+          [
+            "fa",
+            0.000015079975128173828
+          ],
+          [
+            "ml",
+            0.000014007091522216795
+          ],
+          [
+            "uk",
+            0.000012218952178955078
+          ],
+          [
+            "he",
+            0.000010371208190917969
+          ],
+          [
+            "ca",
+            0.000010371208190917969
+          ],
+          [
+            "ur",
+            0.000010251998901367188
+          ],
+          [
+            "sl",
+            0.000008881092071533203
+          ],
+          [
+            "sa",
+            0.000008821487426757812
+          ],
+          [
+            "bn",
+            0.000006258487701416016
+          ],
+          [
+            "te",
+            0.0000057220458984375
+          ],
+          [
+            "hr",
+            0.000005245208740234375
+          ],
+          [
+            "sw",
+            0.000004827976226806641
+          ],
+          [
+            "lt",
+            0.000003874301910400391
+          ],
+          [
+            "is",
+            0.000003874301910400391
+          ],
+          [
+            "sk",
+            0.000003039836883544922
+          ],
+          [
+            "lv",
+            0.0000025033950805664062
+          ],
+          [
+            "gl",
+            0.000002264976501464844
+          ],
+          [
+            "yo",
+            0.00000196695327758789
+          ],
+          [
+            "bg",
+            0.0000015497207641601562
+          ],
+          [
+            "eu",
+            0.0000015497207641601562
+          ],
+          [
+            "et",
+            0.0000015497207641601562
+          ],
+          [
+            "hy",
+            0.0000013709068298339844
+          ],
+          [
+            "bs",
+            0.0000013709068298339844
+          ],
+          [
+            "ne",
+            0.000001132488250732422
+          ],
+          [
+            "az",
+            0.000001132488250732422
+          ],
+          [
+            "yue",
+            9.5367431640625e-7
+          ],
+          [
+            "ht",
+            8.940696716308594e-7
+          ],
+          [
+            "my",
+            8.344650268554688e-7
+          ],
+          [
+            "mr",
+            5.364418029785156e-7
+          ],
+          [
+            "af",
+            4.76837158203125e-7
+          ],
+          [
+            "sq",
+            4.76837158203125e-7
+          ],
+          [
+            "sr",
+            4.172325134277344e-7
+          ],
+          [
+            "oc",
+            4.172325134277344e-7
+          ],
+          [
+            "yi",
+            4.172325134277344e-7
+          ],
+          [
+            "mn",
+            4.172325134277344e-7
+          ],
+          [
+            "be",
+            3.576278686523438e-7
+          ],
+          [
+            "lo",
+            3.576278686523438e-7
+          ],
+          [
+            "pa",
+            3.576278686523438e-7
+          ],
+          [
+            "kk",
+            3.576278686523438e-7
+          ],
+          [
+            "fo",
+            2.980232238769531e-7
+          ],
+          [
+            "bo",
+            2.980232238769531e-7
+          ],
+          [
+            "sd",
+            1.788139343261719e-7
+          ],
+          [
+            "ps",
+            1.1920928955078125e-7
+          ],
+          [
+            "kn",
+            1.1920928955078125e-7
+          ],
+          [
+            "ka",
+            5.960464477539064e-8
+          ],
+          [
+            "gu",
+            5.960464477539064e-8
+          ],
+          [
+            "mk",
+            5.960464477539064e-8
+          ],
+          [
+            "mt",
+            5.960464477539064e-8
+          ],
+          [
+            "as",
+            5.960464477539064e-8
+          ],
+          [
+            "tg",
+            0
+          ],
+          [
+            "uz",
+            0
+          ],
+          [
+            "so",
+            0
+          ],
+          [
+            "tk",
+            0
+          ],
+          [
+            "lb",
+            0
+          ],
+          [
+            "mg",
+            0
+          ],
+          [
+            "tt",
+            0
+          ],
+          [
+            "ln",
+            0
+          ],
+          [
+            "ha",
+            0
+          ],
+          [
+            "ba",
+            0
+          ],
+          [
+            "su",
+            0
+          ],
+          [
+            "am",
+            0
+          ]
+        ],
+        "duration_after_vad": 30.07125,
+        "language_probability": 0.986328125,
+        "transcription_options": {
+          "prefix": null,
+          "best_of": 5,
+          "hotwords": null,
+          "patience": 1,
+          "beam_size": 5,
+          "temperatures": [
+            0.8,
+            1
+          ],
+          "initial_prompt": "",
+          "length_penalty": 1,
+          "max_new_tokens": null,
+          "suppress_blank": true,
+          "clip_timestamps": "0.0",
+          "suppress_tokens": [
+            -1
+          ],
+          "word_timestamps": false,
+          "log_prob_threshold": -1,
+          "repetition_penalty": 1,
+          "without_timestamps": false,
+          "append_punctuations": "\"'.。,，!！?？:：”)]}、",
+          "no_speech_threshold": 0.6,
+          "no_repeat_ngram_size": 0,
+          "prepend_punctuations": "\"'“¿([{-",
+          "max_initial_timestamp": 1,
+          "condition_on_previous_text": true,
+          "compression_ratio_threshold": 1.8,
+          "prompt_reset_on_temperature": 0.5,
+          "hallucination_silence_threshold": null
+        }
+      },
+      "text": " And so I enter into evidence, my tarnished coat of arms,  my muses acquired like bruises, my talismans and charms,  the tick, tick, tick of love bombs, my veins of pitch black ink,  all's fair in love and poetry.  Sincerely, the chairman of the Tortured Poets Department.  The Tortured Poets Department, phantom clear vinyl, only at Target.  Subtitles by the Amara.org community",
+      "segments": [
+        {
+          "id": 1,
+          "end": 4.3,
+          "seek": 3000,
+          "text": " And so I enter into evidence, my tarnished coat of arms,",
+          "start": 0,
+          "words": null,
+          "tokens": [
+            50365,
+            400,
+            370,
+            286,
+            3242,
+            666,
+            4467,
+            11,
+            452,
+            256,
+            1083,
+            4729,
+            10690,
+            295,
+            5812,
+            11,
+            50580
+          ],
+          "avg_logprob": -0.2094006643752859,
+          "temperature": 0.8,
+          "no_speech_prob": 0,
+          "compression_ratio": 1.6028708133971292
+        },
+        {
+          "id": 2,
+          "end": 10.2,
+          "seek": 3000,
+          "text": " my muses acquired like bruises, my talismans and charms,",
+          "start": 5.12,
+          "words": null,
+          "tokens": [
+            50621,
+            452,
+            1038,
+            279,
+            17554,
+            411,
+            25267,
+            3598,
+            11,
+            452,
+            4023,
+            1434,
+            599,
+            293,
+            41383,
+            11,
+            50875
+          ],
+          "avg_logprob": -0.2094006643752859,
+          "temperature": 0.8,
+          "no_speech_prob": 0,
+          "compression_ratio": 1.6028708133971292
+        },
+        {
+          "id": 3,
+          "end": 15.88,
+          "seek": 3000,
+          "text": " the tick, tick, tick of love bombs, my veins of pitch black ink,",
+          "start": 10.54,
+          "words": null,
+          "tokens": [
+            50892,
+            264,
+            5204,
+            11,
+            5204,
+            11,
+            5204,
+            295,
+            959,
+            19043,
+            11,
+            452,
+            29390,
+            295,
+            7293,
+            2211,
+            11276,
+            11,
+            51159
+          ],
+          "avg_logprob": -0.2094006643752859,
+          "temperature": 0.8,
+          "no_speech_prob": 0,
+          "compression_ratio": 1.6028708133971292
+        },
+        {
+          "id": 4,
+          "end": 18.22,
+          "seek": 3000,
+          "text": " all's fair in love and poetry.",
+          "start": 16.76,
+          "words": null,
+          "tokens": [
+            51203,
+            439,
+            311,
+            3143,
+            294,
+            959,
+            293,
+            15155,
+            13,
+            51276
+          ],
+          "avg_logprob": -0.2094006643752859,
+          "temperature": 0.8,
+          "no_speech_prob": 0,
+          "compression_ratio": 1.6028708133971292
+        },
+        {
+          "id": 5,
+          "end": 22.82,
+          "seek": 3000,
+          "text": " Sincerely, the chairman of the Tortured Poets Department.",
+          "start": 19.28,
+          "words": null,
+          "tokens": [
+            51329,
+            318,
+            4647,
+            323,
+            356,
+            11,
+            264,
+            22770,
+            295,
+            264,
+            48415,
+            3831,
+            6165,
+            1385,
+            5982,
+            13,
+            51506
+          ],
+          "avg_logprob": -0.2094006643752859,
+          "temperature": 0.8,
+          "no_speech_prob": 0,
+          "compression_ratio": 1.6028708133971292
+        },
+        {
+          "id": 6,
+          "end": 27.04,
+          "seek": 3000,
+          "text": " The Tortured Poets Department, phantom clear vinyl, only at Target.",
+          "start": 23.44,
+          "words": null,
+          "tokens": [
+            51537,
+            440,
+            48415,
+            3831,
+            6165,
+            1385,
+            5982,
+            11,
+            903,
+            25796,
+            1850,
+            25226,
+            11,
+            787,
+            412,
+            24586,
+            13,
+            51717
+          ],
+          "avg_logprob": -0.2094006643752859,
+          "temperature": 0.8,
+          "no_speech_prob": 0,
+          "compression_ratio": 1.6028708133971292
+        },
+        {
+          "id": 7,
+          "end": 33,
+          "seek": 3007,
+          "text": " Subtitles by the Amara.org community",
+          "start": 30,
+          "words": null,
+          "tokens": [
+            50365,
+            8511,
+            27689,
+            904,
+            538,
+            264,
+            2012,
+            2419,
+            13,
+            4646,
+            1768,
+            50515
+          ],
+          "avg_logprob": -0.4202356613599338,
+          "temperature": 0.8,
+          "no_speech_prob": 0.8740234375,
+          "compression_ratio": 0.8181818181818182
+        }
+      ]
+    }
   }
 }
-```
-
-**在请求体中包含音频或视频文件，API 将返回转录的文本结果。**
+</code></pre>
+</details></div>
 
 ## 🦺 性能测试
 

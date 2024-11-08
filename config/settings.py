@@ -51,7 +51,7 @@ class Settings:
         # 是否开启 debug 模式 | Whether to enable debug mode
         debug: bool = False
         # 当检测到项目代码变动时是否自动重载项目 | Whether to automatically reload the project when changes to the project code are detected
-        reload_on_file_change: bool = os.getenv("RELOAD_ON_FILE_CHANGE", True)
+        reload_on_file_change: bool = os.getenv("RELOAD_ON_FILE_CHANGE", False)
         # FastAPI 服务 IP | FastAPI service IP
         ip: str = "0.0.0.0"
         # FastAPI 服务端口 | FastAPI service port
