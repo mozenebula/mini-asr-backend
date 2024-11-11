@@ -29,22 +29,21 @@
 #              `--'   `--'
 # ==============================================================================
 
-from fastapi import Form
-from pydantic import HttpUrl
+import datetime as dt
 
-from app.api.models.WhisperTaskRequest import WhisperTaskRequest
+from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+
+# 定义基础类 | Define Base class
+TaskBase = declarative_base()
 
 
-class DouyinVideoTask(WhisperTaskRequest):
-    url: HttpUrl = Form(
-        description="抖音视频的 URL 地址 / URL address of the Douyin video",
-        example="https://v.douyin.com/iANRkr9m/"
-    )
-    platform: str = Form(
-        default="douyin",
-        description="指定平台为抖音 / Specify the platform as Douyin"
-    )
-    save_data_in_db: bool = Form(
-        default=True,
-        description="是否将视频数据保存到数据库 / Whether to save video data to the database"
-    )
+class CrawlerTask(TaskBase):
+    __tablename__ = "crawler_tasks"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    task_id = Column(Integer, nullable=False)
+    url = Column(Text, nullable=False)
+    data = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=dt.datetime.now())
+    updated_at = Column(DateTime(timezone=True), default=dt.datetime.now())

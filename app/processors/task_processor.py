@@ -39,7 +39,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import List, Any, Iterable, Optional
 
 from app.database.DatabaseManager import DatabaseManager
-from app.database.TaskModels import Task, TaskStatus
+from app.database.models.TaskModels import Task, TaskStatus
 from app.model_pool.AsyncModelPool import AsyncModelPool
 from app.services.callback_service import CallbackService
 from app.utils.file_utils import FileUtils
@@ -436,7 +436,7 @@ class TaskProcessor:
 
                 # 通用的结果结构 | Common result structure
                 result = {
-                    "text": " ".join([seg['text'] for seg in segments]),
+                    "text": " ".join([seg['text'] for seg in segments]).strip(),
                     "segments": segments,
                     "info": info
                 }

@@ -63,6 +63,10 @@ tags_metadata = [
         "name": "Douyin-Tasks",
         "description": "**(抖音 任务 / Douyin Tasks)**",
     },
+    {
+        "name": "ChatGPT-Tasks",
+        "description": "**(ChatGPT 任务 / ChatGPT Tasks)**",
+    }
 ]
 
 

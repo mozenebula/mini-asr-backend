@@ -14,6 +14,7 @@ coloredlogs==15.0.1
 concurrent-log-handler==0.9.25
 ctranslate2==4.5.0
 decorator==4.4.2
+distro==1.9.0
 fastapi==0.115.3
 faster-whisper==1.0.3
 ffmpeg==1.4
@@ -32,6 +33,7 @@ idna==3.10
 imageio==2.36.0
 imageio-ffmpeg==0.5.1
 Jinja2==3.1.4
+jiter==0.7.0
 llvmlite==0.43.0
 MarkupSafe==3.0.2
 more-itertools==10.5.0
@@ -41,6 +43,7 @@ networkx==3.4.2
 numba==0.60.0
 numpy==2.0.2
 onnxruntime==1.19.2
+openai==1.54.3
 openai-whisper==20240930
 packaging==24.1
 pillow==11.0.0

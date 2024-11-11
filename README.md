@@ -27,6 +27,7 @@ The system efficiently manages resource scheduling and task management through a
 * **Asynchronous Model Pool** : Implements an efficient asynchronous AI model pool that supports multi-instance concurrent processing for OpenAI Whisper and Faster Whisper models under thread-safe conditions. In CUDA-accelerated, multi-GPU environments, intelligent loading mechanisms dynamically assign models to GPUs, balancing load and optimizing task processing. Note: Concurrency is unavailable on single-GPU setups.
 * **Asynchronous Database** : Supports MySQL and SQLite databases. It can run locally without MySQL, as SQLite allows for quick setup. When using MySQL, it facilitates distributed computing with multiple nodes accessing the same database for tasks.
 * **Asynchronous Web Crawlers** : Equipped with data crawler modules for multiple platforms, currently supporting `Douyin` and `TikTok`. By simply entering the video link, users can quickly process media for speech recognition, with plans for more social media platform support in the future.
+* **ChatGPT integration**: This project has integrated ChatGPT as the support for the LLM part, and can use the data in the database to interact with ChatGPT.
 * **Workflow and Component Design (Pending)** : With a focus on Whisper transcription tasks, the project will support a highly customizable workflow system. Users can define components, task dependencies, and execution orders in JSON files or write custom components in Python, facilitating complex multi-step processing.
 * **Event-Driven Intelligent Workflow (Pending)** : The workflow system supports event-driven triggers, including time-based, manual, or crawler module auto-triggers. More than single-task processing, workflows will offer intelligent, automated control with conditional branching, task dependencies, dynamic parameter passing, and retry strategies.
 
@@ -52,10 +53,11 @@ The system efficiently manages resource scheduling and task management through a
 * **Generate Subtitle File** : Users can generate subtitles for a task by specifying the `task_id` and output format (`output_format`). Currently supports (`srt`) and (`vtt`) subtitle file formats.
 * **Create TikTok Task** : Users can create tasks by crawling TikTok videos through a video link.
 * **Create Douyin Task** : Users can create tasks by crawling Douyin videos through a video link.
+- **Use ChatGPT to summarize tasks**: Users can use the task ID to give the translated natural language to ChatGPT for content summarization and other interactions, and support selecting models and custom prompt words in the interface.
 
 ## 📸 Project Screenshots
 
-![2024_07_56_AM.png](https://github.com/Evil0ctal/Fast-Powerful-Whisper-AI-Services-API/blob/main/github/screenshots/2024_07_56_AM.png?raw=true)
+![2024_02_16_AM.png](https://github.com/Evil0ctal/Fast-Powerful-Whisper-AI-Services-API/blob/main/github/screenshots/2024_02_16_AM.png?raw=true)
 
 ## 🚀 Quick Deployment
 
@@ -138,20 +140,28 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 ├── 📁 app/
 │   ├── 📁 api/ -> API layer containing models and routes
 │   │   ├── 📁 models/
-│   │   │   └── 📄 APIResponseModel.py -> Defines API response models
+│   │   │   ├── 📄 APIResponseModel.py -> Defines API response models
+│   │   │   ├── 📄 ChatGPTTaskRequest.py -> Request model for ChatGPT tasks
+│   │   │   ├── 📄 DouyinTaskRequest.py -> Request model for Douyin tasks
+│   │   │   ├── 📄 TikTokTaskRequest.py -> Request model for TikTok tasks
+│   │   │   ├── 📄 WhisperTaskRequest.py -> Request model for Whisper tasks
+│   │   │   └── 📄 WorkFlowModels.py -> Workflow data models
 │   │   ├── 📁 routers/
 │   │   │   ├── 🔍 health_check.py -> Health check endpoint
 │   │   │   ├── 📝 whisper_tasks.py -> Routes for Whisper tasks
-│   │   │   └── 🔄 work_flows.py -> Routes for workflow management
+│   │   │   ├── 🔄 work_flows.py -> Routes for workflow management
+│   │   │   ├── 💬 chatgpt_tasks.py -> Routes for ChatGPT-related tasks
+│   │   │   ├── 🌐 douyin_tasks.py -> Routes for Douyin-related tasks
+│   │   │   └── 🎥 tiktok_tasks.py -> Routes for TikTok-related tasks
 │   │   └── 📄 router.py -> Main router module
 │   ├── 🕸️ crawlers/ -> Modules for web crawling
 │   │   ├── 📁 platforms/
 │   │   │   ├── 📁 douyin/
-│   │   │   │   ├── 🐛 abogus.py -> (`・ω・´) Whats This?
+│   │   │   │   ├── 🐛 abogus.py -> (`・ω・´) Whats This? 
 │   │   │   │   ├── 🚀 crawler.py -> Douyin data crawler
 │   │   │   │   ├── 📡 endpoints.py -> API endpoints for Douyin crawler
 │   │   │   │   ├── 🧩 models.py -> Models for Douyin data
-│   │   │   │   └── 🛠️ utils.py -> Utility functions for Douyin crawler
+│   │   │   │   ├── 🛠️ utils.py -> Utility functions for Douyin crawler
 │   │   │   │   └── 📘 README.md -> Douyin module documentation
 │   │   │   └── 📁 tiktok/
 │   │   │       ├── 🚀 crawler.py -> TikTok data crawler
@@ -159,9 +169,12 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 │   │   │       ├── 🧩 models.py -> Models for TikTok data
 │   │   │       └── 📘 README.md -> TikTok module documentation
 │   ├── 💾 database/ -> Database models and management
-│   │   ├── 🗄️ DatabaseManager.py -> Handles database connections
-│   │   ├── 📂 TaskModels.py -> Task-related database models
-│   │   └── 📂 WorkFlowModels.py -> Workflow-related database models
+│   │   ├── 📁 models/
+│   │   │   ├── 📂 TaskModels.py -> Task-related database models
+│   │   │   ├── 📂 WorkFlowModels.py -> Workflow-related database models
+│   │   │   ├── 🧠 ChatGPTModels.py -> Models for ChatGPT tasks
+│   │   │   └── 🕸️ CrawlerModels.py -> Models for crawlers and platforms
+│   │   └── 🗄️ DatabaseManager.py -> Handles database connections
 │   ├── 🌐 http_client/ -> HTTP client setup
 │   │   ├── ⚙️ AsyncHttpClient.py -> Asynchronous HTTP client
 │   │   └── ❗ HttpException.py -> Custom HTTP exceptions
@@ -189,8 +202,8 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 │   └── 📂 -> Default TEMP Files Folder
 ├── 📁 log_files/ -> Log files folder
 │   └── 📂 -> Default LOG Files Folder
-└── 📂 WhisperServiceAPI.db -> Default SQLite DB File
-└── 📄 requirements.txt -> Python package requirements
+├── 📂 WhisperServiceAPI.db -> Default SQLite DB File
+├── 📄 requirements.txt -> Python package requirements
 └── 📝 start.py -> Run to start the API
 ```
 
@@ -1260,15 +1273,15 @@ class Settings:
         # 项目名称 | Project name
         title: str = "Fast-Powerful-Whisper-AI-Services-API"
         # 项目描述 | Project description
-        description: str = "An open source speech-to-text API that runs completely locally. The project is based on the OpenAI Whisper model and the faster inference Faster Whisper model, and implements an asynchronous model pool, using the asynchronous features of FastAPI for efficient packaging, supporting thread-safe asynchronous task queues, asynchronous file IO, asynchronous database IO, asynchronous web crawler modules, and more custom features."
+        description: str = "⚡ A high-performance asynchronous API for Automatic Speech Recognition (ASR) and translation. No need to purchase the Whisper API—perform inference using a locally running Whisper model with support for multi-GPU concurrency and designed for distributed deployment. It also includes built-in crawlers for social media platforms like TikTok and Douyin, enabling seamless media processing from multiple social platforms. This provides a powerful and scalable solution for automated media content data processing."
         # 项目版本 | Project version
-        version: str = "1.0.3"
+        version: str = "1.0.4"
         # Swagger 文档 URL | Swagger docs URL
         docs_url: str = "/"
         # 是否开启 debug 模式 | Whether to enable debug mode
         debug: bool = False
         # 当检测到项目代码变动时是否自动重载项目 | Whether to automatically reload the project when changes to the project code are detected
-        reload_on_file_change: bool = os.getenv("RELOAD_ON_FILE_CHANGE", True)
+        reload_on_file_change: bool = os.getenv("RELOAD_ON_FILE_CHANGE", False)
         # FastAPI 服务 IP | FastAPI service IP
         ip: str = "0.0.0.0"
         # FastAPI 服务端口 | FastAPI service port
@@ -1413,6 +1426,20 @@ class Settings:
         web_cookie: str = os.getenv("DOUYIN_WEB_COOKIE", "")
         # Proxy
         proxy: str = os.getenv("DOUYIN_PROXY", None)
+
+    # ChatGPT API 设置 | ChatGPT API settings
+    class ChatGPTSettings:
+        # OpenAI API Key
+        API_Key: str = os.getenv("OPENAI_API_KEY", "")
+        # OpenAI ChatGPT Model
+        GPT_Model: str = "gpt-3.5-turbo"
+
+    # TikHub.io API 设置 | TikHub.io API settings
+    class TikHubAPISettings:
+        # TikHub.io API URL
+        api_domain: str = "https://api.tikhub.io"
+        # TikHub.io API Token
+        api_key: str = os.getenv("TIKHUB_API_KEY", "")
 ```
 
 ## 🛡️ License

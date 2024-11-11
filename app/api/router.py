@@ -33,7 +33,7 @@ from fastapi import APIRouter
 from app.api.routers import (
     health_check, whisper_tasks,
     work_flows, tiktok_tasks,
-    douyin_tasks
+    douyin_tasks, chatgpt_tasks
 )
 
 router = APIRouter()
@@ -52,3 +52,6 @@ router.include_router(tiktok_tasks.router, prefix="/tiktok", tags=["TikTok-Tasks
 
 # Douyin Task API routers
 router.include_router(douyin_tasks.router, prefix="/douyin", tags=["Douyin-Tasks"])
+
+# ChatGPT Task API routers
+router.include_router(chatgpt_tasks.router, prefix="/chatgpt", tags=["ChatGPT-Tasks"])

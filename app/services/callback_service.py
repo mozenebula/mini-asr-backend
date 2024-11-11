@@ -29,14 +29,13 @@
 #              `--'   `--'
 # ==============================================================================
 
-import traceback
 import datetime
 from tenacity import *
-from typing import Optional, Dict, Union
+from typing import Optional, Dict
 from app.database.DatabaseManager import DatabaseManager
 from app.http_client.AsyncHttpClient import AsyncHttpClient
 from app.utils.logging_utils import configure_logging
-from app.database.TaskModels import Task
+from app.database.models.TaskModels import Task
 
 logger = configure_logging(__name__)
 

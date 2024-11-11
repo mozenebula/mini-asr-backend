@@ -29,22 +29,21 @@
 #              `--'   `--'
 # ==============================================================================
 
+from enum import Enum
+
 from fastapi import Form
-from pydantic import HttpUrl
-
-from app.api.models.WhisperTaskRequest import WhisperTaskRequest
+from pydantic import BaseModel
 
 
-class DouyinVideoTask(WhisperTaskRequest):
-    url: HttpUrl = Form(
-        description="抖音视频的 URL 地址 / URL address of the Douyin video",
-        example="https://v.douyin.com/iANRkr9m/"
-    )
-    platform: str = Form(
-        default="douyin",
-        description="指定平台为抖音 / Specify the platform as Douyin"
-    )
-    save_data_in_db: bool = Form(
-        default=True,
-        description="是否将视频数据保存到数据库 / Whether to save video data to the database"
-    )
+class SaveToDatabaseEnum(str, Enum):
+    true = True
+    false = False
+
+
+class ChatGPTTaskRequest(BaseModel):
+    task_id: int = Form(description="任务ID / Task ID")
+    chatgpt_api_key: str = Form('', description="ChatGPT API秘钥 / ChatGPT API Key")
+    chatgpt_prompt: str = Form('', description="ChatGPT 提示词 / ChatGPT Prompt")
+    chatgpt_model: str = Form('', description="ChatGPT 模型 / ChatGPT Model")
+    output_language: str = Form("en", description="输出语言 / Output Language")
+    save_to_database: bool = Form(True, description="是否保存到数据库 / Whether to save to database")

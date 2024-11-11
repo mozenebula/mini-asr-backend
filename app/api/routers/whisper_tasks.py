@@ -38,8 +38,8 @@ from fastapi.responses import FileResponse
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.models.APIResponseModel import ResponseModel, ErrorResponseModel
-from app.api.models.WhisperTaskRequest import WhisperTaskRequest, WhisperTaskFileOption
-from app.database.TaskModels import (
+from app.api.models.WhisperTaskRequest import WhisperTaskFileOption
+from app.database.models.TaskModels import (
     TaskStatus,
     TaskStatusHttpCode,
     TaskStatusHttpMessage,
@@ -67,7 +67,7 @@ async def task_create(
             description="媒体文件（支持的格式：音频和视频，如 MP3, WAV, MP4, MKV 等） / Media file (supported formats: audio and video, e.g., MP3, WAV, MP4, MKV)"
         ),
         task_data: WhisperTaskFileOption = Query()
-):
+) -> ResponseModel:
     """
     # [中文]
 

@@ -1,3 +1,34 @@
+# ==============================================================================
+# Copyright (C) 2024 Evil0ctal
+#
+# This file is part of the Whisper-Speech-to-Text-API project.
+# Github: https://github.com/Evil0ctal/Whisper-Speech-to-Text-API
+#
+# This project is licensed under the Apache License 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at:
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+#                                     ,
+#              ,-.       _,---._ __  / \
+#             /  )    .-'       `./ /   \
+#            (  (   ,'            `/    /|
+#             \  `-"             \'\   / |
+#              `.              ,  \ \ /  |
+#               /`.          ,'-`----Y   |
+#              (            ;        |   '
+#              |  ,-.    ,-'         |  /
+#              |  | (   |  Evil0ctal | /
+#              )  |  \  `.___________|/    Whisper API Out of the Box (Where is my ⭐?)
+#              `--'   `--'
+# ==============================================================================
+
 import traceback
 from typing import Union
 
@@ -65,7 +96,6 @@ async def create_tiktok_video_task(
     """
     try:
         url = str(_DouyinVideoTask.url)
-        platform = str(_DouyinVideoTask.platform)
         data = await DouyinWebCrawler.fetch_one_video_by_url(url)
 
         if not data:
@@ -76,16 +106,25 @@ async def create_tiktok_video_task(
             )
         else:
             # $.aweme_detail.video.play_addr.url_list.[2]
-            url = data.get("aweme_detail", {}).get("video", {}).get("play_addr", {}).get("url_list", [])[-1]
-            print(f"Video URL: {url}")
+            play_addr = data.get("aweme_detail", {}).get("video", {}).get("play_addr", {}).get("url_list", [])[0]
 
         # 创建任务 | Create task
-        task_data = WhisperTaskFileOption(file_url=url, platform=platform)
+        task_data = WhisperTaskFileOption(file_url=play_addr, **_DouyinVideoTask.model_dump())
         task_result = await task_create(
             request=request,
             file_upload=None,
             task_data=task_data
         )
+
+        # 是否保存数据到数据库 | Whether to save data to the database
+        if _DouyinVideoTask.save_data_in_db:
+            # 保存数据到数据库 | Save data to database
+            await request.app.state.db_manager.save_crawler_task(
+                task_id=task_result.data.get("id"),
+                url=url,
+                data=data
+            )
+
         return task_result
 
     except HTTPException as http_error:

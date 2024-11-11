@@ -43,9 +43,9 @@ class Settings:
         # 项目名称 | Project name
         title: str = "Fast-Powerful-Whisper-AI-Services-API"
         # 项目描述 | Project description
-        description: str = "An open source speech-to-text API that runs completely locally. The project is based on the OpenAI Whisper model and the faster inference Faster Whisper model, and implements an asynchronous model pool, using the asynchronous features of FastAPI for efficient packaging, supporting thread-safe asynchronous task queues, asynchronous file IO, asynchronous database IO, asynchronous web crawler modules, and more custom features."
+        description: str = "⚡ A high-performance asynchronous API for Automatic Speech Recognition (ASR) and translation. No need to purchase the Whisper API—perform inference using a locally running Whisper model with support for multi-GPU concurrency and designed for distributed deployment. It also includes built-in crawlers for social media platforms like TikTok and Douyin, enabling seamless media processing from multiple social platforms. This provides a powerful and scalable solution for automated media content data processing."
         # 项目版本 | Project version
-        version: str = "1.0.3"
+        version: str = "1.0.4"
         # Swagger 文档 URL | Swagger docs URL
         docs_url: str = "/"
         # 是否开启 debug 模式 | Whether to enable debug mode
@@ -196,6 +196,13 @@ class Settings:
         web_cookie: str = os.getenv("DOUYIN_WEB_COOKIE", "")
         # Proxy
         proxy: str = os.getenv("DOUYIN_PROXY", None)
+
+    # ChatGPT API 设置 | ChatGPT API settings
+    class ChatGPTSettings:
+        # OpenAI API Key
+        API_Key: str = os.getenv("OPENAI_API_KEY", "")
+        # OpenAI ChatGPT Model
+        GPT_Model: str = "gpt-3.5-turbo"
 
     # TikHub.io API 设置 | TikHub.io API settings
     class TikHubAPISettings:

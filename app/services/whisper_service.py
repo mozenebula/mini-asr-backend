@@ -41,7 +41,7 @@ from pydub import AudioSegment
 
 from app.model_pool.AsyncModelPool import AsyncModelPool
 from app.database.DatabaseManager import DatabaseManager
-from app.database.TaskModels import Task
+from app.database.models.TaskModels import Task
 from app.processors.task_processor import TaskProcessor
 from app.utils.file_utils import FileUtils
 from app.utils.logging_utils import configure_logging

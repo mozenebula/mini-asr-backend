@@ -31,15 +31,18 @@
 
 import asyncio
 import datetime
+import json
 import traceback
-from typing import Optional, List, Dict, Union, Any
+from typing import Optional, List, Dict, Union
 from sqlalchemy import select, and_, func, case, inspect
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, AsyncEngine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
 from contextlib import asynccontextmanager
-from app.database.TaskModels import TaskBase, Task, QueryTasksOptionalFilter, TaskStatus, TaskPriority
-from app.database.WorkFlowModels import WorkFlowBase, Workflow, WorkflowTask, WorkflowNotification
+from app.database.models.TaskModels import TaskBase, Task, QueryTasksOptionalFilter, TaskStatus, TaskPriority
+from app.database.models.WorkFlowModels import WorkFlowBase, Workflow, WorkflowTask, WorkflowNotification
+from app.database.models.CrawlerModels import CrawlerTask
+from app.database.models.ChatGPTModels import ChatGPTTask
 from app.utils.logging_utils import configure_logging
 
 # 配置日志记录器 | Configure logger
@@ -77,6 +80,7 @@ class DatabaseManager:
         self._session_factory: Optional[sessionmaker] = None
         self.reconnect_interval: int = reconnect_interval
         self._is_connected: bool = False
+        self._max_retries: int = 5
 
     async def initialize(self) -> None:
         """
@@ -93,12 +97,16 @@ class DatabaseManager:
 
         Attempt to connect to the database with automatic retry and initialize engine and session factory based on database type.
         """
+        retry_count = 0
         while not self._is_connected:
             try:
                 self._engine = create_async_engine(
                     self.database_url,
                     echo=False,
                     pool_pre_ping=True,
+                    pool_size=5,
+                    max_overflow=10,
+                    pool_timeout=30,
                     future=True
                 )
                 self._session_factory = sessionmaker(
@@ -106,6 +114,7 @@ class DatabaseManager:
                     expire_on_commit=False,
                     class_=AsyncSession
                 )
+
                 async with self._engine.begin() as conn:
                     # 使用 conn.run_sync 调用 inspect 确认表是否存在
                     def sync_inspect(connection):
@@ -114,20 +123,30 @@ class DatabaseManager:
 
                     existing_tables = await conn.run_sync(sync_inspect)
 
+                    # 检查是否存在表，如果不存在则创建 | Check if tables exist, if not create
                     if 'tasks' not in existing_tables:
                         await conn.run_sync(TaskBase.metadata.create_all)
                     if 'workflow_workflows' not in existing_tables:
                         await conn.run_sync(WorkFlowBase.metadata.create_all)
+                    if 'crawler_tasks' not in existing_tables:
+                        await conn.run_sync(CrawlerTask.metadata.create_all)
+                    if 'chatgpt_tasks' not in existing_tables:
+                        await conn.run_sync(ChatGPTTask.metadata.create_all)
 
                 self._is_connected = True
                 logger.info(f"{self.database_type.upper()} database connected and tables initialized successfully.")
             except OperationalError as e:
-                logger.error(f"Database connection failed: {e}")
-                logger.info(f"Retrying in {self.reconnect_interval} seconds...")
+                retry_count += 1
+                if retry_count >= self._max_retries:
+                    logger.error(f"Failed to connect to database after {retry_count} attempts: {e}")
+                    raise
+                logger.error(
+                    f"Database connection failed: {e}. Retrying in {self.reconnect_interval} seconds... (Attempt {retry_count}/{self._max_retries})")
                 await asyncio.sleep(self.reconnect_interval)
             except Exception as e:
                 logger.error(f"Unexpected error during database connection: {e}")
                 logger.error(traceback.format_exc())
+                raise
 
     @asynccontextmanager
     async def get_session(self) -> AsyncSession:
@@ -141,7 +160,17 @@ class DatabaseManager:
         if not self._is_connected:
             await self._connect()
         async with self._session_factory() as session:
-            yield session
+            try:
+                yield session
+            except OperationalError as e:
+                logger.error(f"Operational error in session: {e}. Reconnecting to database.")
+                self._is_connected = False
+                await self._connect()
+                yield session  # Re-yield after reconnecting
+            except SQLAlchemyError as e:
+                logger.error(f"SQLAlchemy error in session: {e}")
+                await session.rollback()
+                raise
 
     async def add_task(self, task: Task) -> None:
         """
@@ -156,6 +185,10 @@ class DatabaseManager:
             try:
                 session.add(task)
                 await session.commit()
+            except OperationalError:
+                self._is_connected = False
+                logger.error("Connection lost while adding task. Attempting to reconnect.")
+                await self.add_task(task)
             except SQLAlchemyError as e:
                 logger.error(f"Error adding task: {e}")
                 logger.error(traceback.format_exc())
@@ -203,6 +236,10 @@ class DatabaseManager:
                     .limit(max_concurrent_tasks)
                 )
                 return result.scalars().all()
+            except OperationalError:
+                self._is_connected = False
+                logger.error("Connection lost while fetching queued tasks. Attempting to reconnect.")
+                return await self.get_queued_tasks(max_concurrent_tasks)
             except SQLAlchemyError as e:
                 logger.error(f"Error fetching queued tasks: {e}")
                 logger.error(traceback.format_exc())
@@ -450,6 +487,56 @@ class DatabaseManager:
 
             except SQLAlchemyError as e:
                 logger.error(f"Error creating workflow: {e}")
+                logger.error(traceback.format_exc())
+                await session.rollback()
+                raise
+
+    async def save_crawler_task(self, task_id: int, url: str, data: dict) -> None:
+        """
+        保存爬虫任务的数据到数据库中
+
+        Save crawler task data to the database.
+
+        :param task_id: 任务ID | Task ID
+        :param url: 任务的 URL | Task URL
+        :param data: 爬虫任务数据 | Crawler task data
+        :return: None
+        """
+        async with self.get_session() as session:
+            try:
+                crawler_task = CrawlerTask(
+                    task_id=task_id,
+                    url=url,
+                    data=json.dumps(data, ensure_ascii=False)
+                )
+                session.add(crawler_task)
+                await session.commit()
+            except SQLAlchemyError as e:
+                logger.error(f"Error saving crawler task data: {e}")
+                logger.error(traceback.format_exc())
+                await session.rollback()
+                raise
+
+    async def save_chatgpt_task(self, task_id: int, chatgpt_data: dict) -> None:
+        """
+        保存 ChatGPT 任务的数据到数据库中
+
+        Save ChatGPT task data to the database.
+
+        :param task_id: 任务ID | Task ID
+        :param chatgpt_data: ChatGPT 任务数据 | ChatGPT task data
+        :return: None
+        """
+        async with self.get_session() as session:
+            try:
+                chatgpt_task = ChatGPTTask(
+                    task_id=task_id,
+                    data=json.dumps(chatgpt_data, ensure_ascii=False)
+                )
+                session.add(chatgpt_task)
+                await session.commit()
+            except SQLAlchemyError as e:
+                logger.error(f"Error saving ChatGPT task data: {e}")
                 logger.error(traceback.format_exc())
                 await session.rollback()
                 raise
