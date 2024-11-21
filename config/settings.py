@@ -28,6 +28,7 @@
 #              )  |  \  `.___________|/    Whisper API Out of the Box (Where is my ⭐?)
 #              `--'   `--'
 # ==============================================================================
+
 import os
 from typing import Optional
 from dotenv import load_dotenv

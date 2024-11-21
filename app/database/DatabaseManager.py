@@ -100,15 +100,22 @@ class DatabaseManager:
         retry_count = 0
         while not self._is_connected:
             try:
-                self._engine = create_async_engine(
-                    self.database_url,
-                    echo=False,
-                    pool_pre_ping=True,
-                    pool_size=5,
-                    max_overflow=10,
-                    pool_timeout=30,
-                    future=True
-                )
+                if self.database_type == "mysql":
+                    self._engine = create_async_engine(
+                        self.database_url,
+                        echo=False,
+                        pool_pre_ping=True,
+                        pool_size=5,
+                        max_overflow=10,
+                        pool_timeout=30,
+                        future=True
+                    )
+                elif self.database_type == "sqlite":
+                    self._engine = create_async_engine(
+                        self.database_url,
+                        echo=False,
+                        future=True
+                    )
                 self._session_factory = sessionmaker(
                     bind=self._engine,
                     expire_on_commit=False,
