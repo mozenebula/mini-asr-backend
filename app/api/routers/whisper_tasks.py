@@ -95,7 +95,10 @@ async def task_create(
         - 任务完成后回调程序会发送一个 POST 请求，包含任务数据。
         - 你可以参考接口文档中的回调测试接口在控制台查看回调信息。
         - 例如：`http://localhost/api/whisper/callback/test`
-    - `priority` (TaskPriority): 任务优先级，默认为 `TaskPriority.NORMAL`。
+    - `priority` (TaskPriority): 任务优先级，默认为 `normal`，具体取值如下：
+        - `low`: 低优先级，使用小写字母。
+        - `normal`: 正常优先级，使用小写字母。
+        - `high`: 高优先级，使用小写字母。
     - `platform` (Optional[str]): 指定平台，例如 'tiktok' 或 'douyin'，用于方便区分不同平台的任务在数据库进行查询和分类，默认为空，可以根据需要自定义。
     - `language` (str): 指定输出语言，例如 'en' 或 'zh'，留空则自动检测。
     - `temperature` (str): 采样温度，可以是单个值或使用英文逗号分隔的多个值，将在后端转换为列表，例如 "0.8,1.0"。
@@ -145,7 +148,10 @@ async def task_create(
         - The callback program will send a POST request containing task data after the task is completed.
         - You can view the callback information in the console by referring to the callback test interface in the API documentation.
         - For example: `http://localhost/api/whisper/callback/test`
-    - `priority` (TaskPriority): Task priority, default is `TaskPriority.NORMAL`.
+    - `priority` (TaskPriority): Task priority, default is `normal`, specific values are as follows:
+        - `low`: Low priority, use lowercase letters.
+        - `normal`: Normal priority, use lowercase letters.
+        - `high`: High priority, use lowercase letters.
     - `platform` (Optional[str]): Specify the platform, e.g., 'tiktok' or 'douyin', for easy query and classification of tasks from different platforms in the database, default is empty, can be customized according to needs.
     - `language` (str): Specify the output language, e.g., 'en' or 'zh', leave empty for auto-detection.
     - `temperature` (str): Sampling temperature, can be a single value or multiple values separated by commas, which will be converted to a list on the backend, e.g., "0.8,1.0".
@@ -494,7 +500,7 @@ async def task_delete(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=ErrorResponseModel(
                     code=status.HTTP_404_NOT_FOUND,
-                    message=TaskStatusHttpMessage.NOT_FOUND.value,
+                    message=TaskStatusHttpMessage.not_found.value,
                     router=str(request.url),
                     params=dict(request.query_params),
                 ).model_dump()
@@ -586,41 +592,41 @@ async def task_result(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=ErrorResponseModel(
                     code=status.HTTP_404_NOT_FOUND,
-                    message=TaskStatusHttpMessage.NOT_FOUND.value,
+                    message=TaskStatusHttpMessage.not_found.value,
                     router=str(request.url),
                     params=dict(request.query_params),
                 ).model_dump()
             )
 
         # 任务处于排队中 - 返回202 | Task is queued - return 202
-        if task.status == TaskStatus.QUEUED:
+        if task.status == TaskStatus.queued:
             raise HTTPException(
-                status_code=TaskStatusHttpCode.QUEUED.value,
+                status_code=TaskStatusHttpCode.queued.value,
                 detail=ErrorResponseModel(
-                    code=TaskStatusHttpCode.QUEUED.value,
-                    message=TaskStatusHttpMessage.QUEUED.value,
+                    code=TaskStatusHttpCode.queued.value,
+                    message=TaskStatusHttpMessage.queued.value,
                     router=str(request.url),
                     params=dict(request.query_params),
                 ).model_dump()
             )
         # 任务正在处理中 - 返回202 | Task is processing - return 202
-        elif task.status == TaskStatus.PROCESSING:
+        elif task.status == TaskStatus.processing:
             raise HTTPException(
-                status_code=TaskStatusHttpCode.PROCESSING.value,
+                status_code=TaskStatusHttpCode.processing.value,
                 detail=ErrorResponseModel(
-                    code=TaskStatusHttpCode.PROCESSING.value,
-                    message=TaskStatusHttpMessage.PROCESSING.value,
+                    code=TaskStatusHttpCode.processing.value,
+                    message=TaskStatusHttpMessage.processing.value,
                     router=str(request.url),
                     params=dict(request.query_params),
                 ).model_dump()
             )
         # 任务失败 - 返回500 | Task failed - return 500
-        elif task.status == TaskStatus.FAILED:
+        elif task.status == TaskStatus.failed:
             raise HTTPException(
-                status_code=TaskStatusHttpCode.FAILED.value,
+                status_code=TaskStatusHttpCode.failed.value,
                 detail=ErrorResponseModel(
-                    code=TaskStatusHttpCode.FAILED.value,
-                    message=TaskStatusHttpMessage.FAILED.value,
+                    code=TaskStatusHttpCode.failed.value,
+                    message=TaskStatusHttpMessage.failed.value,
                     router=str(request.url),
                     params=dict(request.query_params),
                 ).model_dump()
@@ -628,7 +634,7 @@ async def task_result(
 
         # 任务已完成 - 返回200 | Task is completed - return 200
         return ResponseModel(
-            code=TaskStatusHttpCode.COMPLETED.value,
+            code=TaskStatusHttpCode.completed.value,
             router=str(request.url),
             params=dict(request.query_params),
             data=task.to_dict()
@@ -641,7 +647,7 @@ async def task_result(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=ErrorResponseModel(
                 code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                message=TaskStatusHttpMessage.SERVICE_UNAVAILABLE.value,
+                message=TaskStatusHttpMessage.service_unavailable.value,
                 router=str(request.url),
                 params=dict(request.query_params),
             ).model_dump()
@@ -1366,13 +1372,13 @@ async def generate_subtitles(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ErrorResponseModel(
                 code=status.HTTP_404_NOT_FOUND,
-                message=TaskStatusHttpMessage.NOT_FOUND.value,
+                message=TaskStatusHttpMessage.not_found.value,
                 router=str(request.url),
                 params=dict(request.query_params),
             ).model_dump()
         )
 
-    if task.status != TaskStatus.COMPLETED:
+    if task.status != TaskStatus.completed:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ErrorResponseModel(

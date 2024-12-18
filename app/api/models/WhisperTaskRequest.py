@@ -37,9 +37,9 @@ from pydantic import BaseModel
 
 
 class TaskPriority(str, Enum):
-    HIGH = "high"
-    NORMAL = "normal"
-    LOW = "low"
+    high = "high"
+    normal = "normal"
+    low = "low"
 
 
 class TaskType(str, Enum):
@@ -57,7 +57,7 @@ class WhisperTaskRequest(BaseModel):
         description="回调URL，任务完成时通知客户端 / Callback URL to notify the client when the task is completed"
     )
     priority: TaskPriority = Form(
-        TaskPriority.NORMAL,
+        TaskPriority.normal,
         description="任务优先级 / Task priority"
     )
     platform: Optional[str] = Form(

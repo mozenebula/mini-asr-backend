@@ -111,41 +111,41 @@ async def chatgpt_summary(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=ErrorResponseModel(
                     code=status.HTTP_404_NOT_FOUND,
-                    message=TaskStatusHttpMessage.NOT_FOUND.value,
+                    message=TaskStatusHttpMessage.not_found.value,
                     router=str(request.url),
                     params=dict(request.query_params),
                 ).model_dump()
             )
 
         # 任务处于排队中 - 返回202 | Task is queued - return 202
-        if task.status == TaskStatus.QUEUED:
+        if task.status == TaskStatus.queued:
             raise HTTPException(
-                status_code=TaskStatusHttpCode.QUEUED.value,
+                status_code=TaskStatusHttpCode.queued.value,
                 detail=ErrorResponseModel(
-                    code=TaskStatusHttpCode.QUEUED.value,
-                    message=TaskStatusHttpMessage.QUEUED.value,
+                    code=TaskStatusHttpCode.queued.value,
+                    message=TaskStatusHttpMessage.queued.value,
                     router=str(request.url),
                     params=dict(request.query_params),
                 ).model_dump()
             )
         # 任务正在处理中 - 返回202 | Task is processing - return 202
-        elif task.status == TaskStatus.PROCESSING:
+        elif task.status == TaskStatus.processing:
             raise HTTPException(
-                status_code=TaskStatusHttpCode.PROCESSING.value,
+                status_code=TaskStatusHttpCode.processing.value,
                 detail=ErrorResponseModel(
-                    code=TaskStatusHttpCode.PROCESSING.value,
-                    message=TaskStatusHttpMessage.PROCESSING.value,
+                    code=TaskStatusHttpCode.processing.value,
+                    message=TaskStatusHttpMessage.processing.value,
                     router=str(request.url),
                     params=dict(request.query_params),
                 ).model_dump()
             )
         # 任务失败 - 返回500 | Task failed - return 500
-        elif task.status == TaskStatus.FAILED:
+        elif task.status == TaskStatus.failed:
             raise HTTPException(
-                status_code=TaskStatusHttpCode.FAILED.value,
+                status_code=TaskStatusHttpCode.failed.value,
                 detail=ErrorResponseModel(
-                    code=TaskStatusHttpCode.FAILED.value,
-                    message=TaskStatusHttpMessage.FAILED.value,
+                    code=TaskStatusHttpCode.failed.value,
+                    message=TaskStatusHttpMessage.failed.value,
                     router=str(request.url),
                     params=dict(request.query_params),
                 ).model_dump()
@@ -193,7 +193,7 @@ async def chatgpt_summary(
             )
 
         return ResponseModel(
-            code=TaskStatusHttpCode.COMPLETED.value,
+            code=TaskStatusHttpCode.completed.value,
             router=str(request.url),
             params=_ChatGPTTaskRequest.model_dump(),
             data=chatgpt_data
@@ -206,7 +206,7 @@ async def chatgpt_summary(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=ErrorResponseModel(
                 code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                message=TaskStatusHttpMessage.SERVICE_UNAVAILABLE.value,
+                message=TaskStatusHttpMessage.service_unavailable.value,
                 router=str(request.url),
                 params=_ChatGPTTaskRequest.model_dump()
             ).model_dump()

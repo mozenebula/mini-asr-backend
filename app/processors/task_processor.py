@@ -194,11 +194,12 @@ class TaskProcessor:
                 tasks = await self.db_manager.get_queued_tasks(self.max_concurrent_tasks)
                 for task in tasks:
                     # 将任务状态更新为处理中 | Update task status to processing
-                    await self.db_manager.update_task(task.id, status=TaskStatus.PROCESSING)
+                    await self.db_manager.update_task(task.id, status=TaskStatus.processing)
                 # 将结果放入 task_result_queue 中 | Put the result into task_result_queue
                 await self.task_processing_queue.put(tasks)
             except Exception as e:
                 self.logger.error(f"Error fetching tasks from database: {str(e)}")
+                self.logger.error(traceback.format_exc())
             finally:
                 # 标记查询完成 | Mark the query as completed
                 self.fetch_queue.task_done()
@@ -464,7 +465,7 @@ class TaskProcessor:
 
                 # 更新任务状态和结果 | Update task status and result
                 task_update = {
-                    "status": TaskStatus.COMPLETED,
+                    "status": TaskStatus.completed,
                     "file_path": task.file_path,
                     "file_size_bytes": task.file_size_bytes,
                     "file_duration": task.file_duration,
@@ -482,7 +483,7 @@ class TaskProcessor:
 
         except Exception as e:
             task_update = {
-                "status": TaskStatus.FAILED,
+                "status": TaskStatus.failed,
                 "error_message": str(e)
             }
             self.update_queue.put_nowait((task.id, task_update))

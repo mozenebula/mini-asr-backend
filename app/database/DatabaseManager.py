@@ -38,6 +38,7 @@ from sqlalchemy import select, and_, func, case, inspect
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, AsyncEngine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
+from sqlalchemy.sql import func
 from contextlib import asynccontextmanager
 from app.database.models.TaskModels import TaskBase, Task, QueryTasksOptionalFilter, TaskStatus, TaskPriority
 from app.database.models.WorkFlowModels import WorkFlowBase, Workflow, WorkflowTask, WorkflowNotification
@@ -232,12 +233,12 @@ class DatabaseManager:
             try:
                 result = await session.execute(
                     select(Task)
-                    .where(Task.status == TaskStatus.QUEUED)
+                    .where(Task.status == TaskStatus.queued)
                     .order_by(
                         case(
-                            (Task.priority == TaskPriority.HIGH, 1),
-                            (Task.priority == TaskPriority.NORMAL, 2),
-                            (Task.priority == TaskPriority.LOW, 3),
+                            (Task.priority == TaskPriority.high, 1),
+                            (Task.priority == TaskPriority.normal, 2),
+                            (Task.priority == TaskPriority.low, 3),
                         )
                     )
                     .limit(max_concurrent_tasks)

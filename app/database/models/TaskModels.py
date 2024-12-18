@@ -36,6 +36,7 @@ from typing import Optional
 
 from pydantic import BaseModel, constr, Field, ConfigDict, field_validator
 from sqlalchemy import Column, Integer, String, Enum, Text, JSON, Float, DateTime
+from sqlalchemy.types import Enum as SQLAlchemyEnum
 from sqlalchemy.ext.declarative import declarative_base
 
 # 定义基础类 | Define Base class
@@ -44,47 +45,47 @@ TaskBase = declarative_base()
 
 # 定义任务状态的枚举类型 | Define an enum for task status
 class TaskStatus(enum.Enum):
-    QUEUED = 'queued'
-    PROCESSING = 'processing'
-    COMPLETED = 'completed'
-    FAILED = 'failed'
+    queued = 'queued'
+    processing = 'processing'
+    completed = 'completed'
+    failed = 'failed'
 
 
 # TaskStatusHttpCode 枚举类，用于映射 TaskStatus 到 HTTP 状态码
 # TaskStatusHttpCode enum class, used to map TaskStatus to HTTP status code
 class TaskStatusHttpCode(enum.Enum):
     # 202 - Accepted (for ongoing processing)
-    QUEUED = HTTPStatus.ACCEPTED
+    queued = HTTPStatus.ACCEPTED
     # 202 - Accepted (for ongoing processing)
-    PROCESSING = HTTPStatus.ACCEPTED
+    processing = HTTPStatus.ACCEPTED
     # 200 - OK (for successful completion)
-    COMPLETED = HTTPStatus.OK
+    completed = HTTPStatus.OK
     # 500 - Internal Server Error (for task failure)
-    FAILED = HTTPStatus.INTERNAL_SERVER_ERROR
+    failed = HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 # TaskStatusHttpMessage 枚举类，用于映射 TaskStatus 到 HTTP 状态消息
 # TaskStatusHttpMessage enum class, used to map TaskStatus to HTTP status message
 class TaskStatusHttpMessage(enum.Enum):
     # 202 - Accepted (for ongoing processing)
-    QUEUED = "Task is queued and not started yet"
+    queued = "Task is queued and not started yet"
     # 202 - Accepted (for ongoing processing)
-    PROCESSING = "Task is currently being processed"
+    processing = "Task is currently being processed"
     # 200 - OK (for successful completion)
-    COMPLETED = "Task has been completed"
+    completed = "Task has been completed"
     # 404 - Not Found (for task not found or invalid task ID)
-    NOT_FOUND = "Task not found or has been deleted or invalid task ID"
+    not_found = "Task not found or has been deleted or invalid task ID"
     # 500 - Internal Server Error (for task failure)
-    FAILED = "Task failed during processing"
+    failed = "Task failed during processing"
     # 503 - Service Unavailable (for database error)
-    SERVICE_UNAVAILABLE = "Database error occurred. Please try again later."
+    service_unavailable = "Database error occurred. Please try again later."
 
 
 # 定义任务优先级的枚举类型 | Define an enum for task priority
 class TaskPriority(enum.Enum):
-    LOW = 'low'
-    NORMAL = 'normal'
-    HIGH = 'high'
+    high = "high"
+    normal = "normal"
+    low = "low"
 
 
 class Task(TaskBase):
@@ -103,9 +104,9 @@ class Task(TaskBase):
     # 回调时间 | Callback time
     callback_time = Column(DateTime, nullable=True)
     # 任务优先级 | Task priority
-    priority = Column(Enum(TaskPriority), default=TaskPriority.NORMAL)
+    priority = Column(Enum(TaskPriority), default=TaskPriority.normal)
     # 任务状态，初始为 QUEUED | Task status, initially QUEUED
-    status = Column(Enum(TaskStatus), default=TaskStatus.QUEUED)
+    status = Column(Enum(TaskStatus), default=TaskStatus.queued)
     # 检测到的语言 | Detected language
     language = Column(String(10), nullable=True)
     # 任务对应的平台 | Platform for the task
