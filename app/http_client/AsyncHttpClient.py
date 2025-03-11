@@ -177,7 +177,7 @@ class AsyncHttpClient:
         """
         return await self.fetch_data('HEAD', url, **kwargs)
 
-    async def download_file(self, url: str, save_path: str, chunk_size: int = 1024) -> None:
+    async def download_file(self, url: str, save_path: str, chunk_size: int = 1024 * 1024) -> None:
         """
         下载文件到指定路径 (Download file to specified path)
 
@@ -187,7 +187,7 @@ class AsyncHttpClient:
         """
         async with self.semaphore:
             try:
-                async with self.aclient.stream("GET", url) as response:
+                async with self.aclient.stream("GET", url, headers=self.get_headers(url)) as response:
                     response.raise_for_status()
                     with open(save_path, "wb") as file:
                         async for chunk in response.aiter_bytes(chunk_size):
@@ -270,6 +270,42 @@ class AsyncHttpClient:
         异步上下文管理器出口 (Async context manager exit)
         """
         await self.close()
+
+    @staticmethod
+    def get_headers(url: str) -> dict:
+        """根据 URL 关键字匹配不同平台并返回合适的 headers"""
+
+        # 通用 headers
+        common_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept-Language": "zh-CN,zh;q=0.9",
+        }
+
+        # 关键字 -> 平台 headers 映射
+        platform_headers = {
+            "douyin": {
+                "Referer": "https://www.douyin.com/",
+            },
+            "xiaohongshu": {
+                "Referer": "https://www.xiaohongshu.com/",
+            },
+            "bilibili": {
+                "Referer": "https://www.bilibili.com/",
+                "Origin": "https://www.bilibili.com/"
+            },
+            "youtube": {
+                "Referer": "https://www.youtube.com/",
+            },
+        }
+
+        # 遍历匹配 URL 是否包含特定关键词
+        for keyword, headers in platform_headers.items():
+            if keyword in url:
+                return {**common_headers, **headers}
+
+        # 默认返回通用 headers
+        return common_headers
 
 
 if __name__ == "__main__":
