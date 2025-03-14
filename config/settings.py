@@ -57,6 +57,9 @@ class Settings:
         ip: str = "0.0.0.0"
         # FastAPI 服务端口 | FastAPI service port
         port: int = 80
+        # SSL证书
+        ssl_keyfile: str = "/etc/nginx/ssl/qstack.site.key"
+        ssl_certfile: str = "/etc/nginx/ssl/qstack.site_bundle.crt"
 
     # 数据库设置 | Database settings
     class DatabaseSettings:

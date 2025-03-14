@@ -42,5 +42,7 @@ if __name__ == "__main__":
     uvicorn.run('app.main:app',
                 host=Settings.FastAPISettings.ip,
                 port=Settings.FastAPISettings.port,
-                reload=Settings.FastAPISettings.reload_on_file_change
+                reload=Settings.FastAPISettings.reload_on_file_change,
+                ssl_keyfile=Settings.FastAPISettings.ssl_keyfile,
+                ssl_certfile=Settings.FastAPISettings.ssl_certfile
                 )
